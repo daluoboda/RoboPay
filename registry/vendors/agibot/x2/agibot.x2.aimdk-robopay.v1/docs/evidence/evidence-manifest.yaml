@@ -1,0 +1,26 @@
+schemaVersion: robopay-evidence.v1
+profileId: agibot.x2.aimdk-robopay.v1
+
+evidence:
+  - evidenceId: AGX2-HISTORICAL-PHYSICAL-01
+    file: agibot-x2-historical-physical-evidence-redacted.mp4
+    sha256: 242620d1982bbd1a80778319f6433f49e9ca434e39b83d96ff0268d6856fb70f
+    bytes: 2194472
+    durationSec: 7.50
+    format: h264-1920x1080-30fps-video-only
+    captureDate: 2026-07-13
+    scope: historical-physical-action-only
+    trace:
+      skillId: x2_right_wave
+      aimdkTaskId: 8
+      paymentReference: "0x35fa38...605a0a"
+      paymentRelation: same historical recorded run; full value retained privately
+    privacy:
+      - identifiable person and wall signage cropped out
+      - source audio removed
+      - source metadata removed
+      - no terminal, wallet, host, IP, serial, or local path is visible
+    limitations:
+      - Shows the physical wave, not the new asynchronous result contract.
+      - Historical AimDK evidence was RUNNING/accepted, not terminal SUCCESS.
+      - Does not prove failure-without-settlement.
