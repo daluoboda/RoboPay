@@ -67,6 +67,21 @@ The profile replaces that robot-side HTTP wait with Zenoh action/result topics,
 an immediate-acceptance contract, and `actionId` correlation. A fresh physical
 run is still required to prove the complete new relay behavior.
 
+## Reviewer verification checklist
+
+Before accepting a new physical validation run, reviewers should confirm:
+
+- the action targets the published `cra_two_cycle_pick_place` skill;
+- the envelope preserves `actionId`, `robotId`, `skillId`,
+  `idempotencyKey`, `paramsHash`, and payment evidence;
+- unpaid, invalid, expired, and replayed requests produce no actuation;
+- the controller project starts only after the validated action is received;
+- the terminal `robot/tunnel/result` uses the same `actionId`;
+- failure or timeout produces no settlement;
+- successful execution produces a correlated settlement receipt;
+- public evidence contains no wallet secrets, complete payment payloads,
+  controller addresses, private paths, or exact taught coordinates.
+
 ## New-contract validation matrix
 
 - [ ] Skill catalog returns the published skill and `0.002 USDC` price.
