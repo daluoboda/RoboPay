@@ -117,6 +117,25 @@ Local result on 2026-07-22: **26/26 tests passed** with Python 3.12.13.
 These tests use a fake executor. They validate the contract and fail-closed
 routing behavior, not physical motion or on-chain settlement.
 
+## Reviewer verification checklist
+
+Before accepting a new physical Tier 2 validation run, reviewers should
+confirm:
+
+- discovery publishes the `x2_right_wave` skill and its `0.002 USDC` price;
+- the envelope preserves `actionId`, `robotId`, `skillId`,
+  `idempotencyKey`, `paramsHash`, and payment evidence;
+- unpaid, invalid, expired, tampered, and replayed requests produce no
+  actuation;
+- the adapter invokes the configured AimDK preset exactly once;
+- AimDK `RUNNING` remains pending and is not reported as terminal success;
+- the terminal `robot/tunnel/result` uses the same `actionId`;
+- robot failure or timeout produces no settlement;
+- successful settlement occurs only after an explicit terminal success
+  result;
+- public evidence contains no complete payment payloads, wallet secrets,
+  robot serial numbers, internal addresses, usernames, or private paths.
+
 ## Required strict physical rerun
 
 - [ ] Robot and skill discovery show profile, price, and physical scope.
