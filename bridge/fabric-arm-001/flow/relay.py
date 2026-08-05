@@ -11,6 +11,12 @@ from flow.payment import verify_payment, PaymentError, PaymentState, SettlementL
 from flow.zenoh_transport import LoopbackTransport
 
 try:
+    from flow.x402 import X402Verifier, X402Error
+except Exception:                      # pragma: no cover - optional module
+    X402Verifier = None
+    X402Error = PaymentError
+
+try:
     from flow import profiles
 except Exception:                       # pragma: no cover - profiles are optional
     profiles = None
@@ -26,6 +32,9 @@ class Relay:
         self.transport = transport
         self.ledger = ledger or SettlementLedger()
         self.processed_keys = {}  # idempotency_key -> action_id
+        # One verifier per relay: replay protection must span the relay's
+        # lifetime (a txHash can never be settled twice by this robot).
+        self.x402 = X402Verifier() if X402Verifier is not None else None
 
     # -- profile-driven 402 -------------------------------------------------
     def _payment_required(self, skill_id: str, error: str | None = None) -> dict:
@@ -60,10 +69,15 @@ class Relay:
         if not request.get("payment"):
             return self._payment_required(skill_id)
 
-        # 3) Verify payment (mock in D1; real x402 facilitator in D7).
+        # 3) Verify payment through the x402 challenge (protocol-level:
+        #    amount/network/asset match + well-formed txHash + no replay).
+        #    Unverified -> 402, robot never touched.
         try:
-            verify_payment(request["payment"])
-        except PaymentError as e:
+            if self.x402 is not None:
+                self.x402.verify(request["payment"])
+            else:
+                verify_payment(request["payment"])
+        except (PaymentError, X402Error) as e:
             return self._payment_required(skill_id, str(e))
 
         # 3b) Validate the request against skills.yaml BEFORE touching the
