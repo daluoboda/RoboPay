@@ -169,6 +169,30 @@ and an explicit `PASS/FAIL` on the settlement policy. `python -m flow.demo
 --object <scene>` prints the full 10-step trace including the raw 402 body and
 the execution counter proving the robot was not contacted before payment.
 
+## 10b. Payment boundary: x402 verification (D7, PR #70 review response)
+
+`flow/x402.py` replaces the D1 mock with a protocol-level x402 verifier:
+
+* the receipt must match the 402 challenge from `payment-policy.yaml`
+  (amount `0.10` USDC, network `base-sepolia`, asset address);
+* the `txHash` must be a well-formed `0x` + 64-hex chain hash;
+* a `(payer, txHash)` pair can never be reused (replay protection lives in
+  the relay's verifier instance — one per relay, spanning the relay lifetime);
+* every failure raises `X402Error` (subclass of `PaymentError`) and the relay
+  answers **402**, so the robot is never contacted with an unverified payment.
+
+Verification runs **protocol-level by default** (deterministic, offline,
+CI-safe). A live call to the official facilitator (`https://x402.org/facilitator`)
+can be enabled per-verifier (`online=True`) and its evidence is tagged
+`verification: facilitator` when reachable, otherwise honestly tagged
+`verification: protocol` with `reachable: false` — the demo never claims an
+on-chain verification it did not perform.
+
+**Evidence** — `flow/x402.py`, `flow/payment.py::verify_payment`,
+`tests/test_x402.py` (17 tests: challenge shape, bad amount/network/asset,
+malformed txHash, replay, relay-never-touches-robot for unverified payments),
+`python -m flow.demo --payment-mode x402 --all`.
+
 ## 11. Code Quality ✅
 
 Layered and swappable: payment / transport / execution never learn about each
@@ -209,8 +233,10 @@ why they were replaced.
 
 ## Open items
 
-* **Live x402 settlement** — `mock` mode ships by default; `verify_payment` and
-  `SettlementLedger` are the two swap points for Base Sepolia. Both modes share
-  one code path, so the safety guarantees are identical.
+* **Live x402 facilitator settlement** — verification now runs through
+  `flow/x402.py` (protocol-level by default, facilitator-call opt-in via
+  `online=True`). On-chain settlement of USDC on `eip155:84532` remains a
+  swap point (`SettlementLedger`); it requires a funded wallet and is not
+  part of the offline-reproducible demo.
 * **Screen recording** — the demo already emits the full trace to stdout; a
   capture will be attached to the PR description.
