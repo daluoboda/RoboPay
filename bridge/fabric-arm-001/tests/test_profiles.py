@@ -17,7 +17,10 @@ from flow.relay import Relay
 from flow.zenoh_transport import ACTION_TOPIC, RESULT_TOPIC
 
 ROOT = Path(__file__).resolve().parent.parent
-PAID = {"txHash": "0xabc123", "verified": True}
+PAID = {"txHash": "0x" + "a" * 64, "verified": True, "amount": "0.10",
+        "network": "base-sepolia",
+        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "payer": "0xpayer0000000000000000000000000000000001"}
 REQ = {"skill": "pick_object", "robotId": "fabric-arm-001"}
 
 
