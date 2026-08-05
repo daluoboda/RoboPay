@@ -138,7 +138,10 @@ class TestPyBulletBackendContract(unittest.TestCase):
         out = Relay(SimExecutor("pybullet")).handle({
             "skill": "pick_object", "robotId": "fabric-arm-001",
             "amount": "0.01", "idempotencyKey": "stub-fail",
-            "payment": {"txHash": "0xabc123", "verified": True},
+            "payment": {"txHash": "0x" + "a" * 64, "verified": True,
+                        "amount": "0.10", "network": "base-sepolia",
+                        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                        "payer": "0xpayer0000000000000000000000000000000001"},
             "params": {"object": "collision"}})
         self.assertEqual(out["status"], "failed")
         self.assertFalse(out["settled"])
@@ -192,7 +195,10 @@ class TestSimToSimAgreement(unittest.TestCase):
 
     def test_failures_never_settle_on_either_engine(self):
         from flow.relay import Relay
-        paid = {"txHash": "0xabc123", "verified": True}
+        paid = {"txHash": "0x" + "a" * 64, "verified": True,
+                "amount": "0.10", "network": "base-sepolia",
+                "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                "payer": "0xpayer0000000000000000000000000000000001"}
         for engine in BACKENDS:
             for case, expect in (("cube", True), ("unreachable", False),
                                  ("collision", False), ("timeout", False)):
