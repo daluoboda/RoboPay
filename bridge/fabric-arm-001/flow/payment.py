@@ -22,18 +22,16 @@ class PaymentError(Exception):
 
 
 def verify_payment(payment: dict | None) -> dict:
-    """Mock verification for D1.
+    """Verify a payment receipt against the pick_object x402 challenge.
 
-    A payment is considered verified when it carries a txHash.
-    D7: call the x402 facilitator here and return the verified receipt.
+    D1 used a mock ("any txHash passes"). D7 replaced it with a protocol-level
+    x402 verifier (flow/x402.py): the receipt must match the 402 challenge
+    (amount / network / asset), txHash must be well-formed, and the txHash
+    cannot be replayed. Raises PaymentError on any mismatch so the relay
+    answers 402 and never dispatches an unverified action.
     """
-    if not payment:
-        raise PaymentError("no payment attached")
-    tx_hash = payment.get("txHash")
-    if not tx_hash:
-        raise PaymentError("missing txHash")
-    # D1 mock: accept any txHash-bearing payment as verified.
-    return {"verified": True, "txHash": tx_hash}
+    from flow.x402 import X402Verifier   # deferred: avoids import cycle
+    return X402Verifier().verify(payment)
 
 
 class SettlementLedger:
