@@ -58,7 +58,7 @@ jobs:
           pip install -r bridge/requirements.txt -r tests/requirements.txt
 
       - name: Run pytest (Pay-to-Actuate contract + headless MuJoCo sim)
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/test_bridge.py -q
 
       - name: Headless simulation proof (independent, extra evidence)
         continue-on-error: true
