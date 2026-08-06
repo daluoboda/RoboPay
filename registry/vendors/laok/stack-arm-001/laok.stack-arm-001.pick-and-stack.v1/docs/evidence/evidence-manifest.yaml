@@ -1,0 +1,91 @@
+schemaVersion: robopay-evidence.v1
+profileId: laok.stack-arm-001.pick-and-stack.v1
+
+claimBoundary:
+  live: Live x402 verify+settle on Base Sepolia (real on-chain USDC transfer) and
+    live MuJoCo physics execution, both performed for this submission.
+  notClaimed: A publication video of the simulator motion is not included; the
+    MuJoCo result metrics are the authoritative execution evidence.
+
+evidence:
+  - evidenceId: E-HTTP402-001
+    file: terminal/laok-fabric-arm-402.png
+    sha256: f7877348e766c1f58af412f2c5d60d1d1f1f88c28621410f54705ce2bee6290e
+    bytes: 28466
+    dimensionsPx: 980x171
+    format: png
+    captureDate: 2026-08-06
+    scope: live-402-payment-challenge
+    visibleEvidence:
+      - HTTP/1.1 402 Payment Required
+      - PAYMENT-REQUIRED header advertising x402 exact scheme
+      - errorCode PAYMENT_REQUIRED
+    limitations:
+      - Does not by itself prove settlement; correlate with E-SETTLE-001.
+
+  - evidenceId: E-SETTLE-001
+    file: terminal/laok-fabric-arm-settle.png
+    sha256: 9dbcd5b14a8da021504fd9efaf565d5ee6aa6d572b65f5da7aac13c493368844
+    bytes: 34928
+    dimensionsPx: 980x323
+    format: png
+    captureDate: 2026-08-06
+    scope: live-real-x402-settlement-on-base-sepolia
+    trace:
+      transactionHash: 0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
+      network: eip155:84532
+      payerBalanceBefore: 19.8
+      payerBalanceAfter: 19.7
+      onchainStatus: 1
+    visibleEvidence:
+      - EIP-3009 transferWithAuthorization signed
+      - facilitator /verify is_valid = True
+      - facilitator /settle success = True
+      - real txHash on Base Sepolia
+      - payer balance delta -0.10 USDC
+      - onchain status 1 (success)
+    limitations:
+      - The settlement is the live payment gate proof; the simulator run is
+        evidenced separately in E-MUJOCO-001.
+
+  - evidenceId: E-MUJOCO-001
+    file: terminal/laok-fabric-arm-mujoco.png
+    sha256: adb140196b11faa58446b93fc6d3c540552cf94f1926729b3cd565783dc3d406
+    bytes: 28219
+    dimensionsPx: 980x285
+    format: png
+    captureDate: 2026-08-06
+    scope: live-mujoco-physics-execution
+    trace:
+      skillId: stack_arm_pick_and_stack
+      objectLifted: 0.1313
+      graspState: attached
+      contactForce: 9.81
+      peakForce: 14.90
+      collisionCount: 0
+      stepsUsed: 260
+      stepBudget: 400
+    visibleEvidence:
+      - SUCCESS = True, reason picked
+      - object lifted 0.1313 m
+      - zero collisions
+    limitations:
+      - Simulator output; no physical hardware was actuated.
+
+  - evidenceId: E-ASYNC-001
+    file: terminal/laok-fabric-arm-async.png
+    sha256: 0b45372d95e2df6fd61ee7741147022ee3ee6c03804519c36436499edf98d9f6
+    bytes: 48228
+    dimensionsPx: 980x513
+    format: png
+    captureDate: 2026-08-06
+    scope: live-async-pay-to-actuate-over-zenoh
+    visibleEvidence:
+      - unpaid request -> 402, 0 Zenoh actions
+      - valid paid action -> 202 accepted, correlated success result
+      - duplicate idempotencyKey -> DUPLICATE, no second execution
+      - payment authorizationId replay -> PAYMENT_AUTHORIZATION_REPLAY
+      - expired authorization -> 402 PAYMENT_EXPIRED
+    limitations:
+      - With zenoh not installed the bridge used the in-process loopback
+        transport; the action/result topics and correlation are identical.
