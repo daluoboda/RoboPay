@@ -36,7 +36,7 @@ mappings:
   push_arm_push_object:
     output: mujoco_simulator
     projectNameFrom: local-config.skills.push_arm_push_object.project_name
-    sdkCommand: pick_and_stack
+    sdkCommand: push_object
     requestParametersAllowed: false
     completion:
       runningEvidence:

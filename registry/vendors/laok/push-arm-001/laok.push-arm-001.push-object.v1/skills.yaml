@@ -19,5 +19,5 @@ skills:
       emergencyStop: software failsafe aborts the simulation on anomaly
       softwareFailureAction: abort simulation, never retry the lift
     implementation:
-      source: bridge/laok_stack_arm_001_zenoh_bridge.py
+      source: bridge/laok_push_arm_001_zenoh_bridge.py
       artifactManifest: bridge/simulator.py

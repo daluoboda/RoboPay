@@ -15,7 +15,7 @@ laok.push-arm-001.push-object.v1/
 ├── functions.yaml              # agent function surface (skills/actions/status)
 ├── payment-policy.yaml         # x402 policy: eip155:84532, USDC, 0.10
 ├── examples/
-│   └── action-envelope.pick-place.json
+│   └── action-envelope.push-object.json
 ├── bridge/
 │   ├── laok_stack_arm_001_zenoh_bridge.py   # HTTP + Zenoh bridge
 │   ├── x402_client.py                    # payment gate + facilitator verify/settle
