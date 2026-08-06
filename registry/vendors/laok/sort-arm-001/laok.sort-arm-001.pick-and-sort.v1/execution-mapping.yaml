@@ -36,15 +36,16 @@ mappings:
   sort_arm_pick_and_sort:
     output: mujoco_simulator
     projectNameFrom: local-config.skills.sort_arm_pick_and_sort.project_name
-    sdkCommand: pick_and_stack
-    requestParametersAllowed: false
+    sdkCommand: pick_and_sort
+    requestParametersAllowed: true
     completion:
       runningEvidence:
-        - stage equals descend
-        - graspState equals attaching
-      successEvidence:
-        - objectLifted greater than 0.05
+        - stage equals route_to_bin
         - graspState equals attached
+      successEvidence:
+        - graspState equals released
+        - routed equals true
+        - accuracy lessThan 0.07
         - collisionCount equals 0
     failure:
       modes:
@@ -52,6 +53,7 @@ mappings:
         - collision
         - timeout
         - grasp_failed
+        - misrouted
       action: Abort
       retryRunScript: false
 

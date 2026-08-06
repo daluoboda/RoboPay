@@ -3,14 +3,20 @@ profileId: laok.sort-arm-001.pick-and-sort.v1
 
 skills:
   - skillId: sort_arm_pick_and_sort
-    name: Physics-executed pick-and-sort
+    name: Object routing service (bin A / bin B)
     description: >-
-      Runs a deterministic MuJoCo pick_and_stack controller that moves above the
-      cube, descends, closes the gripper under contact gating, and lifts the
-      object. Returns object lift, contact force, and collision metrics.
+      Paid robot service: routes an incoming object to a client-specified
+      destination bin (A or B). 7-phase MuJoCo controller picks the object,
+      lifts, traverses to the target bin, releases, and verifies routing
+      accuracy. params.target_bin drives the routing decision, making this a
+      parameter-driven service distinct from fixed-destination skills.
     tier: 1
     customBehavior: true
-    params: {}
+    params:
+      target_bin:
+        type: string
+        enum: ["A", "B"]
+        description: Destination bin for object routing
     paymentRequired: true
     timeoutSec: 30
     safety:
@@ -19,5 +25,5 @@ skills:
       emergencyStop: software failsafe aborts the simulation on anomaly
       softwareFailureAction: abort simulation, never retry the lift
     implementation:
-      source: bridge/laok_stack_arm_001_zenoh_bridge.py
+      source: bridge/laok_sort_arm_001_zenoh_bridge.py
       artifactManifest: bridge/simulator.py
