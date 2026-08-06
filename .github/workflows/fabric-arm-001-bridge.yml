@@ -13,9 +13,7 @@ name: fabric-arm-001 bridge CI
 # and real-wallet keys are only ever read from environment variables.
 on:
   push:
-    branches: [main, master]
   pull_request:
-    branches: [main, master]
   workflow_dispatch: {}
 
 concurrency:
