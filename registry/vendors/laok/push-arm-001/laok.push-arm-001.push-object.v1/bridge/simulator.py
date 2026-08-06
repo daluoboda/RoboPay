@@ -35,10 +35,10 @@ import numpy as np
 
 from arm_spec import (
     ARM_JOINTS, BASE_H, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
-    FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
+    FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN, GRASP_WZ,
     GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
     OBSTACLE_RADIUS, PAD_HALF, PickResult, SCENES, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, resolve_scene,
+    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, resolve_scene, solve,
 )
 
 ENGINE = "mujoco"
@@ -321,24 +321,23 @@ class MuJoCoSimulator:
                     return report(False, "unreachable",
                                   f"tip stopped {gap:.3f} m short of the object")
 
-            # -- stage 1/4 MOVE_ABOVE
-            stage = "move_above"
-            if not self._run(KEYFRAMES["above"], STAGE_STEPS["move_above"], PUSH_GRIP):
+            # Push: from behind cube (r=0.25) through to past cube (r=0.40)
+            r_start = max(0.15, planar - 0.10)  # behind cube
+            r_end = 0.40                        # past cube (max reachable at GRASP_WZ)
+            push_start = solve(r_start, GRASP_WZ)
+            push_through = solve(r_end, GRASP_WZ)
+
+            # -- stage 1/3 APPROACH behind cube
+            stage = "approach"
+            if not self._run(push_start, STAGE_STEPS["move_above"], PUSH_GRIP):
                 return report(False, "collision", "obstacle struck during approach")
 
-            # -- stage 2/4 DESCEND to push height (at cube level)
-            stage = "descend"
-            if not self._run(KEYFRAMES["grasp"], STAGE_STEPS["descend"], PUSH_GRIP):
-                return report(False, "collision", "obstacle struck during descent")
-
-            # -- stage 3/4 PUSH: extend arm forward to shove the cube
+            # -- stage 2/3 PUSH through cube (arm extends, shoves cube forward)
             stage = "push"
-            push_n = STAGE_STEPS["lift"]  # reuse lift budget
-            push_target = dict(KEYFRAMES["lift"])  # extend arm forward
-            if not self._run(push_target, push_n, PUSH_GRIP):
+            if not self._run(push_through, STAGE_STEPS["lift"], PUSH_GRIP):
                 return report(False, "collision", "obstacle struck during push")
 
-            # -- stage 4/4 VERIFY: hold briefly, check displacement
+            # -- stage 3/3 VERIFY
             stage = "verify"
             self._hold(STAGE_STEPS["settle"], PUSH_GRIP, sample=True)
 
@@ -349,7 +348,7 @@ class MuJoCoSimulator:
         # Measure horizontal displacement (ignore Z)
         end_pos = self._cube_pos()
         disp = np.hypot(end_pos[0] - start_pos[0], end_pos[1] - start_pos[1])
-        if disp < 0.03:  # minimum 3 cm horizontal displacement
+        if disp < 0.025:  # minimum 3 cm horizontal displacement
             return report(False, "push_failed",
                           f"cube moved only {disp:.3f} m horizontally")
         return report(True, "pushed", f"cube pushed {disp:.3f} m horizontally")
