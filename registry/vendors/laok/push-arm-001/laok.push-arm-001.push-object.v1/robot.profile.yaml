@@ -1,0 +1,38 @@
+schemaVersion: robot-profile.v1
+vendor: laok
+robotModel: push-arm-001
+robotType: simulated-manipulator
+profileId: laok.push-arm-001.push-object.v1
+profileVersion: 1.0.0
+
+displayName: "laok push-arm-001 MuJoCo push object"
+description: >-
+  Simulated 4-DoF arm with a gripper (push-arm-001) running a deterministic,
+  physics-executed push_object skill in the MuJoCo engine. The arm pushes a
+  cube horizontally across the table to a target marker. Skill is triggered
+  only after a verified x402 USDC payment over Base Sepolia.
+submission:
+  scope: simulated
+  tier: 1
+  customSkillEvidence: bridge/laok_push_arm_001_zenoh_bridge.py
+
+runtime:
+  transport: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  bridge: laok-push-arm-001-zenoh
+  controlStack:
+    simulator: MuJoCo (mujoco-python)
+    controller: deterministic horizontal push_object policy
+    sdk: x402 + zenoh-python
+
+identity:
+  robotIdEnv: ROBOT_ID
+  robotPrivateKeyEnv: ROBOT_PRIVATE_KEY
+  payeeWalletEnv: ROBOT_PAYEE_ADDRESS
+  note: Secrets and the robot wallet address are never stored in this profile.
+
+maintainers:
+  - github: daluoboda
+
+status: experimental
