@@ -1,4 +1,4 @@
-"""Behavioral tests for the laok stack-arm-001 RoboPay bridge.
+"""Behavioral tests for the laok push-arm-001 RoboPay bridge.
 
 Exercises the Pay-to-Actuate contract end-to-end against the Bridge core:
 402 challenge, async accepted, MuJoCo execution, params-hash, expiry,
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bridge"))
 from laok_push_arm_001_zenoh_bridge import Bridge, params_hash  # noqa: E402
 
 PAYEE = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-ROBOT = "stack-arm-001-demo-001"
+ROBOT = "push-arm-001-demo-001"
 
 
 def paid(action_id, idem, auth, verified=True, expired=False, amount="100000"):
