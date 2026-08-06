@@ -5,10 +5,10 @@
 - Brand: Fabric Foundation × laok sort-arm-001
 - Scope: simulated manipulator (MuJoCo)
 - Tier: 1 — simulator skill execution
-- Robot: `sort-arm-001` (2-DOF arm + gripper, MuJoCo model)
+- Robot: `sort-arm-001` (4-DoF arm + gripper, MuJoCo model)
 - Payment network: Base Sepolia (`eip155:84532`)
 - Payment asset: USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
-- Skill: `stack_arm_pick_and_stack`
+- Skill: `sort_arm_pick_and_sort`
 - Price: `0.10 USDC` (`100000` smallest units)
 
 The payee wallet address, payer wallet address, and exact x402 signatures are
