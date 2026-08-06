@@ -55,7 +55,7 @@ def test_no_secrets_in_profiles():
 
 def test_action_envelope_example():
     import json
-    env = json.load(open(os.path.join(PROFILE, "examples", "action-envelope.pick-place.json")))
+    env = json.load(open(os.path.join(PROFILE, "examples", "action-envelope.pick-and-stack.json")))
     assert env["skillId"] == "stack_arm_pick_and_stack"
     assert env["payment"]["network"] == "eip155:84532"
     assert env["payment"]["amount"] == "100000"
