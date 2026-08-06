@@ -1,0 +1,38 @@
+schemaVersion: robot-profile.v1
+vendor: laok
+robotModel: fabric-arm-001
+robotType: simulated-manipulator
+profileId: laok.fabric-arm-001.pick-place.v1
+profileVersion: 1.0.0
+
+displayName: "Fabric Foundation x fabric-arm-001 MuJoCo pick-and-place"
+description: >-
+  Simulated 2-DOF arm with a gripper (fabric-arm-001) running a deterministic,
+  physics-executed pick-and-place skill in the MuJoCo engine. The skill is
+  triggered only after a verified x402 USDC payment over Base Sepolia, and its
+  result is returned asynchronously over Zenoh (robot/tunnel/result).
+submission:
+  scope: simulated
+  tier: 1
+  customSkillEvidence: bridge/laok_fabric_arm_zenoh_bridge.py
+
+runtime:
+  transport: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  bridge: laok-fabric-arm-zenoh
+  controlStack:
+    simulator: MuJoCo (mujoco-python)
+    controller: deterministic 5-phase pick_object policy
+    sdk: x402 + zenoh-python
+
+identity:
+  robotIdEnv: ROBOT_ID
+  robotPrivateKeyEnv: ROBOT_PRIVATE_KEY
+  payeeWalletEnv: ROBOT_PAYEE_ADDRESS
+  note: Secrets and the robot wallet address are never stored in this profile.
+
+maintainers:
+  - github: daluoboda
+
+status: experimental
