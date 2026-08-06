@@ -16,9 +16,7 @@ name: stack-arm-001 CI
 # No repository secrets are required: the bridge defaults to mock settlement.
 on:
   push:
-    branches: [main, master]
   pull_request:
-    branches: [main, master]
   workflow_dispatch: {}
 
 concurrency:
