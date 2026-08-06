@@ -10,7 +10,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bridge"))
-from laok_stack_arm_001_zenoh_bridge import Bridge, params_hash  # noqa: E402
+from laok_sort_arm_001_zenoh_bridge import Bridge, params_hash  # noqa: E402
 
 PAYEE = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
 ROBOT = "stack-arm-001-demo-001"
