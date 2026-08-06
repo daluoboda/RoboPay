@@ -1,0 +1,69 @@
+schemaVersion: execution-mapping.v1
+profileId: laok.sort-arm-001.pick-and-sort.v1
+
+transport:
+  type: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  actionSchema: robopay-action.v1
+  resultSchema: robot-action-result.v1
+
+envelope:
+  requiredFields:
+    - actionId
+    - robotId
+    - skillId
+    - params
+    - paramsHash
+    - idempotencyKey
+    - payment
+  requiredPaymentFields:
+    - provider
+    - authorizationId
+    - verified
+    - status
+    - settled
+    - network
+    - asset
+    - amount
+    - payTo
+    - issuedAt
+    - expiresAt
+  paramsHashAlgorithm: sha256(canonical-json(params))
+  correlationField: actionId
+
+mappings:
+  sort_arm_pick_and_sort:
+    output: mujoco_simulator
+    projectNameFrom: local-config.skills.sort_arm_pick_and_sort.project_name
+    sdkCommand: pick_and_stack
+    requestParametersAllowed: false
+    completion:
+      runningEvidence:
+        - stage equals descend
+        - graspState equals attaching
+      successEvidence:
+        - objectLifted greater than 0.05
+        - graspState equals attached
+        - collisionCount equals 0
+    failure:
+      modes:
+        - unreachable
+        - collision
+        - timeout
+        - grasp_failed
+      action: Abort
+      retryRunScript: false
+
+replayProtection:
+  storage: sqlite
+  key: idempotencyKey
+  uniqueFields:
+    - actionId
+    - payment.authorizationId
+  fingerprintFields:
+    - actionId
+    - robotId
+    - skillId
+    - paramsHash
+    - payment.authorizationId

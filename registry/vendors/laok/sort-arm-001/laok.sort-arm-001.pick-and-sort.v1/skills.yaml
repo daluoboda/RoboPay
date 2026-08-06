@@ -1,0 +1,23 @@
+schemaVersion: robot-skills.v1
+profileId: laok.sort-arm-001.pick-and-sort.v1
+
+skills:
+  - skillId: sort_arm_pick_and_sort
+    name: Physics-executed pick-and-sort
+    description: >-
+      Runs a deterministic MuJoCo pick_and_stack controller that moves above the
+      cube, descends, closes the gripper under contact gating, and lifts the
+      object. Returns object lift, contact force, and collision metrics.
+    tier: 1
+    customBehavior: true
+    params: {}
+    paymentRequired: true
+    timeoutSec: 30
+    safety:
+      requiresEnabledIdle: true
+      requiresNoActiveProject: true
+      emergencyStop: software failsafe aborts the simulation on anomaly
+      softwareFailureAction: abort simulation, never retry the lift
+    implementation:
+      source: bridge/laok_stack_arm_001_zenoh_bridge.py
+      artifactManifest: bridge/simulator.py

@@ -1,0 +1,38 @@
+schemaVersion: robot-profile.v1
+vendor: laok
+robotModel: sort-arm-001
+robotType: simulated-manipulator
+profileId: laok.sort-arm-001.pick-and-sort.v1
+profileVersion: 1.0.0
+
+displayName: "laok sort-arm-001 MuJoCo pick and sort"
+description: >-
+  Simulated 4-DoF arm with a gripper (sort-arm-001) running a deterministic,
+  physics-executed pick-and-sort skill in the MuJoCo engine. Two objects of
+  different colors are sorted into separate target zones. The skill is
+  triggered only after a verified x402 USDC payment over Base Sepolia.
+submission:
+  scope: simulated
+  tier: 1
+  customSkillEvidence: bridge/laok_sort_arm_001_zenoh_bridge.py
+
+runtime:
+  transport: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  bridge: laok-sort-arm-001-zenoh
+  controlStack:
+    simulator: MuJoCo (mujoco-python)
+    controller: deterministic multi-phase pick_and_sort policy
+    sdk: x402 + zenoh-python
+
+identity:
+  robotIdEnv: ROBOT_ID
+  robotPrivateKeyEnv: ROBOT_PRIVATE_KEY
+  payeeWalletEnv: ROBOT_PAYEE_ADDRESS
+  note: Secrets and the robot wallet address are never stored in this profile.
+
+maintainers:
+  - github: daluoboda
+
+status: experimental
