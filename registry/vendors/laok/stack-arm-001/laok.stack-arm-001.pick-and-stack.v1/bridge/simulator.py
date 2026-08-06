@@ -18,16 +18,16 @@ import numpy as np
 from arm_spec import (
     ARM_JOINTS, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
     FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
-    GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
+    GRASP_WZ, GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
     OBSTACLE_RADIUS, PAD_HALF, PickResult, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics,
+    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, solve,
 )
 
 ENGINE = "mujoco"
 STACK_STEPS = {"move_above_b": 80, "place": 60, "verify": 60}
 
 # Cube B position (fixed on table, serves as stacking base)
-CUBE_B_POS = (0.20, -0.03)  # xy on table
+CUBE_B_POS = (0.28, 0.0)  # xy on table
 
 
 # ------------------------------------------------------------------- dual-cube model --
@@ -151,7 +151,7 @@ class MuJoCoSimulator:
         self._budget = 400  # increased for stack
 
     def _build(self, scene: dict):
-        xml = _model_xml(scene.get("cube_a", scene.get("cube", [0.15, 0.0])),
+        xml = _model_xml(scene.get("cube_a", scene.get("cube", [0.35, 0.0])),
                          scene.get("cube_b", list(CUBE_B_POS)),
                          scene.get("obstacle"))
         self.model = mujoco.MjModel.from_xml_string(xml)
@@ -289,7 +289,7 @@ class MuJoCoSimulator:
             scene = params
         t0 = time.perf_counter()
         self._build(scene)
-        self._budget = scene.get("budget", 400)
+        self._budget = scene.get("budget", 500)
         start_a = self._cube_a_pos()
         start_b = self._cube_b_pos()
         grasp_state, stage = "open", "home"
@@ -324,6 +324,11 @@ class MuJoCoSimulator:
         if float(np.hypot(a_xy[0], a_xy[1])) > WORK_R + 0.02:
             stage = "stretch"
             return report(False, "unreachable", "cube A out of workspace")
+
+        # Custom keyframes for cube B position
+        r_b = float(np.hypot(b_xy[0], b_xy[1]))
+        above_b = solve(r_b, GRASP_WZ + 0.14)
+        at_b = solve(r_b, GRASP_WZ)
 
         try:
             # 1/7: MOVE_ABOVE_A
@@ -369,15 +374,12 @@ class MuJoCoSimulator:
 
             # 5/7: MOVE_ABOVE_B — traverse to above cube B
             stage = "move_above_b"
-            # Compute elbow-up pose above cube B (reuse "above" keyframe but shifted)
-            above_b = dict(KEYFRAMES["above"])
             if not self._run(above_b, STACK_STEPS["move_above_b"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during traverse")
 
             # 6/7: PLACE — descend onto B and release
             stage = "place"
-            place_pose = dict(KEYFRAMES["grasp"])
-            if not self._run(place_pose, STACK_STEPS["place"], FINGER_CLOSED):
+            if not self._run(at_b, STACK_STEPS["place"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during placement")
             # Release: open fingers, detach
             grasp_state = "release"
