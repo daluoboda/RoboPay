@@ -40,11 +40,12 @@ mappings:
     requestParametersAllowed: false
     completion:
       runningEvidence:
-        - stage equals descend
-        - graspState equals attaching
-      successEvidence:
-        - objectLifted greater than 0.05
+        - stage equals move_above_b
         - graspState equals attached
+      successEvidence:
+        - graspState equals stacked
+        - stackStable equals true
+        - a_z greater than b_z
         - collisionCount equals 0
     failure:
       modes:
@@ -52,6 +53,7 @@ mappings:
         - collision
         - timeout
         - grasp_failed
+        - stack_failed
       action: Abort
       retryRunScript: false
 
