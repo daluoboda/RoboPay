@@ -21,9 +21,9 @@ import numpy as np
 from arm_spec import (
     ARM_JOINTS, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
     FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
-    GRIP_MID, KEYFRAMES, LINK1, LINK2, OBSTACLE_HALF_H,
+    GRASP_WZ, GRIP_MID, KEYFRAMES, LINK1, LINK2, OBSTACLE_HALF_H,
     OBSTACLE_RADIUS, PAD_HALF, PickResult, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics,
+    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, solve,
 )
 
 ENGINE = "mujoco"
@@ -31,7 +31,7 @@ ENGINE = "mujoco"
 # Bin positions on table (destination targets for routing)
 BIN_A_XY = (0.22, 0.10)  # bin A
 BIN_B_XY = (0.22, -0.10)  # bin B
-INCOMING_XY = (0.10, 0.0)  # default incoming object position
+INCOMING_XY = (0.35, 0.0)  # default incoming object position
 
 SORT_STEPS = {"route": 100, "release": 30, "verify": 50}
 
@@ -305,7 +305,7 @@ class MuJoCoSimulator:
 
         t0 = time.perf_counter()
         self._build(scene)
-        self._budget = p.get("budget", 350)
+        self._budget = p.get("budget", 450)
         start_pos = self._cube_pos()
         bin_target = self._bin_pos(target_bin)
         grasp_state, stage = "open", "home"
@@ -374,16 +374,21 @@ class MuJoCoSimulator:
             if not self._run(KEYFRAMES["lift"], STAGE_STEPS["lift"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during lift")
 
+            # Compute custom keyframes for target bin
+            bin_xy = np.array([bin_target[0], bin_target[1]])
+            r_bin = float(np.hypot(bin_xy[0], bin_xy[1]))
+            pan_bin = float(np.arctan2(bin_xy[1], bin_xy[0]))
+            route_above = solve(r_bin, GRASP_WZ + 0.14, pan_bin)
+            route_at = solve(r_bin, GRASP_WZ, pan_bin)
+
             # 5/7 ROUTE_TO_BIN
             stage = "route_to_bin"
-            route_pose = dict(KEYFRAMES["above"])
-            if not self._run(route_pose, SORT_STEPS["route"], FINGER_CLOSED):
+            if not self._run(route_above, SORT_STEPS["route"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during route")
 
             # 6/7 RELEASE at bin
             stage = "release"
-            release_pose = dict(KEYFRAMES["grasp"])
-            if not self._run(release_pose, SORT_STEPS["release"], FINGER_CLOSED):
+            if not self._run(route_at, SORT_STEPS["release"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during release")
 
             grasp_state = "released"
