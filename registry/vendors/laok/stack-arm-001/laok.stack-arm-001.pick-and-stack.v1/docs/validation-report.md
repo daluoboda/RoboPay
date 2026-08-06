@@ -5,7 +5,7 @@
 - Brand: Fabric Foundation × laok stack-arm-001
 - Scope: simulated manipulator (MuJoCo)
 - Tier: 1 — simulator skill execution
-- Robot: `stack-arm-001` (2-DOF arm + gripper, MuJoCo model)
+- Robot: `stack-arm-001` (4-DoF arm + gripper, MuJoCo model)
 - Payment network: Base Sepolia (`eip155:84532`)
 - Payment asset: USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 - Skill: `stack_arm_pick_and_stack`
