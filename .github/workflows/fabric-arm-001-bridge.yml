@@ -81,3 +81,5 @@ jobs:
           pip install "x402>=0.2.0" eth-account web3 httpx
       - name: Assert YAML profiles match arm_spec & transport
         run: python -m pytest tests/test_profiles.py -q
+      - name: Verify x402 settlement tx hashes on Base Sepolia
+        run: python "$GITHUB_WORKSPACE/verify_settlement.py"
