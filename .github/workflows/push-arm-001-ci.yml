@@ -72,3 +72,5 @@ jobs:
           print("METRICS:", r.metrics)
           assert r.success, r.reason
           PY
+      - name: Verify x402 settlement tx hashes on Base Sepolia
+        run: python "$GITHUB_WORKSPACE/verify_settlement.py"
