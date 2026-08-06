@@ -52,6 +52,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          # PyPI's zenoh tops out at 0.4.0; the skill pins >=1.0.0 (nonexistent).
+          # Strip that pin so dependency install succeeds; zenoh is an optional import.
+          ( for f in requirements.txt bridge/requirements.txt tests/requirements.txt; do [ -f "$f" ] && sed -i '/zenoh/d' "$f"; done ) || true
           pip install -r bridge/requirements.txt -r tests/requirements.txt
 
       - name: Run pytest (Pay-to-Actuate contract + headless MuJoCo sim)
