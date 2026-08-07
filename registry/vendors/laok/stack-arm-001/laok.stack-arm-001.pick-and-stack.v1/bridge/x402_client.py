@@ -71,11 +71,23 @@ class PaymentGate:
         if payment.get("provider") != "x402":
             raise PaymentError("PAYMENT_PROVIDER", "provider must be x402")
         req = self.required or {}
-        if payment.get("network") != self.policy.get("network"):
-            raise PaymentError("PAYMENT_NETWORK", "network mismatch")
-        if payment.get("asset", "").lower() != str(self.policy.get("asset", "")).lower():
-            raise PaymentError("PAYMENT_ASSET", "asset mismatch")
-        if str(payment.get("amount")) != str(req.get("amount")):
+        accepted_networks = [self.policy.get("network", "")]
+        pi_networks = self.policy.get("piNetworks", [])
+        accepted_networks.extend(pi_networks)
+        if payment.get("network") not in accepted_networks:
+            raise PaymentError("PAYMENT_NETWORK",
+                f"network mismatch: {payment.get('network')} not in {accepted_networks}")
+        # Asset check: skip for Pi networks (native token)
+        if payment.get("network") not in pi_networks:
+            if payment.get("asset", "").lower() != str(self.policy.get("asset", "")).lower():
+                raise PaymentError("PAYMENT_ASSET", "asset mismatch")
+        # Amount: use Pi-specific amount for Pi networks
+        if payment.get("network") in pi_networks:
+            pi_policy = next((p for p in self.policy.get("piPolicies", [])), {})
+            expected = pi_policy.get("amount", req.get("amount", ""))
+        else:
+            expected = req.get("amount", "")
+        if str(payment.get("amount")) != str(expected):
             raise PaymentError("PAYMENT_AMOUNT", "amount mismatch")
         pay_to = payment.get("payTo", "")
         if self.payee and pay_to and pay_to.lower() != self.payee.lower():
