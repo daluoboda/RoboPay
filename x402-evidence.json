@@ -5,7 +5,9 @@
   "network": "base-sepolia",
   "asset": "USDC",
   "amount_usdc": 0.1,
-  "txs": [],
+  "txs": [
+    "0xef567bf8a100cbb3fe8745606f13576d76e81e8fc64365e78ed57496f4321bcb"
+  ],
   "pi_txs": [],
   "pi_network": "pi-testnet",
   "pi_horizon": "https://api.testnet.minepi.com",
