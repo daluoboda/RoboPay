@@ -7,7 +7,7 @@ This vendor-scoped profile executes a non-trivial, bounded CR3 arm task in real 
 The vendor model is `cr3_robot.urdf` and its meshes from [Dobot-Arm/DOBOT_6Axis_ROS2_V4](https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4), pinned at `0f67ed938c0cec4ed0808af759ddbb608e573dbe` (MIT).
 
 ```
-sha256:6a790fefbba0871f91819a8f8a29a5780b5952026d98396179b4eeb907859e66
+sha256:66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3
 ```
 
 MuJoCo compiles that URDF with only a documented bounded actuator overlay. Webots R2025a converts the **same** pinned URDF at run time through `urdf2webots`; its generated PROTO is not vendor supplied.

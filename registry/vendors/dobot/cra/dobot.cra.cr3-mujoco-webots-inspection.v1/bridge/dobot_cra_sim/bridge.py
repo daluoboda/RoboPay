@@ -27,6 +27,7 @@ from .runtime import run_mujoco_episode
 ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
 METRICS_TOPIC = "robot/dobot_cra_cr3/metrics"
+READY_TOPIC = "robot/dobot_cra_cr3/ready"
 PROFILE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPLAY_DB = PROFILE_ROOT / "artifacts" / "state" / "dobot_cr3_replay.sqlite3"
 
@@ -263,6 +264,7 @@ class BridgeSettings:
     action_topic: str
     result_topic: str
     metrics_topic: str
+    ready_topic: str = READY_TOPIC
 
     @classmethod
     def from_env(cls) -> "BridgeSettings":
@@ -275,6 +277,7 @@ class BridgeSettings:
             action_topic=configured("ZENOH_ACTION_TOPIC", ACTION_TOPIC),
             result_topic=configured("ZENOH_RESULT_TOPIC", RESULT_TOPIC),
             metrics_topic=configured("ZENOH_METRICS_TOPIC", METRICS_TOPIC),
+            ready_topic=configured("ZENOH_READY_TOPIC", READY_TOPIC),
         )
 
 
@@ -288,6 +291,21 @@ class DobotCR3ZenohBridge:
         self._results = self._session.declare_publisher(self.settings.result_topic)
         self._metrics = self._session.declare_publisher(self.settings.metrics_topic)
         self._subscriber = self._session.declare_subscriber(self.settings.action_topic, self._on_sample)
+        self._ready = self._session.declare_publisher(self.settings.ready_topic)
+        # The live runner subscribes before starting this process and will not
+        # issue its first paid action until this is received. That removes the
+        # otherwise-racy first-publication loss on volatile Zenoh topics.
+        self._ready.put(
+            _canonical_json(
+                {
+                    "status": "ready",
+                    "profile_id": PROFILE_ID,
+                    "robot_id": ROBOT_ID,
+                    "action_topic": self.settings.action_topic,
+                    "result_topic": self.settings.result_topic,
+                }
+            ).encode("utf-8")
+        )
 
     def _open_session(self):
         import zenoh
@@ -317,6 +335,7 @@ class DobotCR3ZenohBridge:
         self._subscriber.undeclare()
         self._results.undeclare()
         self._metrics.undeclare()
+        self._ready.undeclare()
         self._session.close()
 
     def spin(self) -> None:  # pragma: no cover - process lifecycle

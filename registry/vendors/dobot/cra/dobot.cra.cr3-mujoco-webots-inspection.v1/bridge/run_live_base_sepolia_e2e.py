@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import zenoh
 from eth_account import Account
 from x402 import x402ClientSync
 from x402.http.clients import x402_requests
@@ -31,6 +32,7 @@ from x402.mechanisms.evm.exact import register_exact_evm_client
 from x402.mechanisms.evm.signers import EthAccountSigner
 
 from dobot_cra_sim.contracts import INSPECTION_SKILL, ROBOT_ID
+from dobot_cra_sim.bridge import READY_TOPIC
 from dobot_cra_sim.visual_proxy import LocalTunnelProxy
 
 
@@ -130,6 +132,18 @@ def _wait_for_terminal(status_url: str, *, timeout_seconds: float = 120.0) -> di
             last = f"transport error: {error}"
         time.sleep(1)
     raise RuntimeError(f"action did not reach terminal status: {last}")
+
+
+def _wait_for_bridge_ready(ready: threading.Event, bridge: subprocess.Popen[str]) -> None:
+    """Fail before payment if the real bridge has not subscribed to Zenoh."""
+
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if ready.wait(0.2):
+            return
+        if bridge.poll() is not None:
+            raise RuntimeError(f"Dobot bridge exited before declaring its Zenoh action subscription (exit={bridge.returncode})")
+    raise RuntimeError("Dobot bridge never declared ready; refusing to send the first paid action")
 
 
 def _tunnel_environment(
@@ -250,6 +264,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         zenoh_config = temp / "zenoh-client.json5"
         zenoh_config.write_text('{"mode":"client","connect":{"endpoints":["tcp/127.0.0.1:7447"]}}', encoding="utf-8")
+        ready = threading.Event()
+        ready_session = zenoh.open(zenoh.Config.from_file(str(zenoh_config)))
+
+        def on_ready(sample) -> None:
+            try:
+                payload = json.loads(bytes(sample.payload.to_bytes()))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return
+            if payload.get("status") == "ready" and payload.get("robot_id") == ROBOT_ID:
+                ready.set()
+
+        ready_subscriber = ready_session.declare_subscriber(READY_TOPIC, on_ready)
         bridge_env = os.environ.copy()
         for name in ("BASE_SEPOLIA_PRIVATE_KEY", "PRIVATE_KEY", "EVM_PRIVATE_KEY"):
             bridge_env.pop(name, None)
@@ -293,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         output_thread = _stream_output(tunnel, prefix="tunnel", enabled=args.visual)
         try:
+            _wait_for_bridge_ready(ready, bridge)
             if proxy is None:
                 _wait_for_public_tunnel(tunnel)
             else:
@@ -359,6 +386,8 @@ def main(argv: list[str] | None = None) -> int:
             if bridge.poll() is None:
                 bridge.terminate()
                 bridge.wait(timeout=15)
+            ready_subscriber.undeclare()
+            ready_session.close()
             if output_thread is not None:
                 output_thread.join(timeout=2)
             if proxy is not None:
