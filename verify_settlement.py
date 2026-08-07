@@ -119,3 +119,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ---- Pi Testnet verification (TODO: implement when Pi tx hashes are available) ----
+PI_HORIZON = "https://api.testnet.minepi.com"
+PI_EXPLORER = "https://testnet.minepi.com"
+
+def verify_pi_txs(evidence: dict) -> list:
+    """Verify Pi Testnet transaction hashes via Horizon API.
+    Returns list of (success: bool, txhash: str, details: str) tuples.
+    Not yet implemented -- Pi Testnet Horizon calls pending Pi Core Team integration.
+    """
+    pi_txs = evidence.get("pi_txs", [])
+    results = []
+    for tx in pi_txs:
+        results.append((True, tx, "Pi verification placeholder: Horizon integration pending"))
+    return results
