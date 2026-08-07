@@ -93,3 +93,14 @@ def test_auth_replay(bridge):
     code, resp = bridge.request_action(paid("act7", "k7", "auth6"))
     assert code == 409
     assert resp["errorCode"] == "PAYMENT_AUTHORIZATION_REPLAY"
+
+def test_txhash_format_validation():
+    import re
+    TXHASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+    assert TXHASH_RE.match("0x" + "f" * 64)
+    assert TXHASH_RE.match("0x" + "a" * 64)
+    assert TXHASH_RE.match("0x" + "0" * 64)
+    assert not TXHASH_RE.match("0x" + "g" * 64)
+    assert not TXHASH_RE.match("abc")
+    assert not TXHASH_RE.match("0x" + "a" * 63)
+    assert not TXHASH_RE.match("0x" + "a" * 65)
