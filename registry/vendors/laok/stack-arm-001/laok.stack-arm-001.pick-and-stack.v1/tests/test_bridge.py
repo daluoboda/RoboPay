@@ -104,3 +104,13 @@ def test_txhash_format_validation():
     assert not TXHASH_RE.match("abc")
     assert not TXHASH_RE.match("0x" + "a" * 63)
     assert not TXHASH_RE.match("0x" + "a" * 65)
+
+
+def test_pi_payment_accepted(bridge):
+    """Pi Testnet payment is gated, accepted, executes, and triggers settlement."""
+    code, resp = bridge.request_action(pi_paid("pi1", "kp1", "auth-pi1"))
+    assert code == 202
+    assert resp["bodyStatus"] == "accepted"
+    r = bridge.actions["pi1"]
+    assert r["status"] == "success"
+    assert r["settlementEligible"] is True
