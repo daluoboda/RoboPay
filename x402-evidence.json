@@ -9,5 +9,8 @@
     "0xad4c5669e1a3351a69256e5c5d507efc939ed9e7cfe0ac8b0be90603a796d1d6",
     "0x4e7db1219898a98187227c4673505f4af61fe22c6a783ad03d8ad9dbe136e80d",
     "0x23439362ac5bf96f57296220c3d143e5442c18f08448c84fa6ca1e69d4e5137b"
-  ]
+  ],
+  "pi_txs": [],
+  "pi_network": "pi-testnet",
+  "pi_horizon": "https://api.testnet.minepi.com"
 }
