@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import time
+import re
 from datetime import datetime, timezone
 
 # Live facilitator is optional: the bridge must still run for local demos /
@@ -135,4 +136,6 @@ def settle_with_facilitator(payload_json: dict, payee: str) -> str:
     tx = getattr(resp, "transaction", None)
     if not tx:
         raise PaymentError("SETTLE_FAILED", str(getattr(resp, "error_reason", "")))
+    if not TXHASH_RE.match(str(tx)):
+        raise PaymentError("FACILITATOR_BAD_TX", f"tx hash format invalid: {tx[:20]}...")
     return tx
