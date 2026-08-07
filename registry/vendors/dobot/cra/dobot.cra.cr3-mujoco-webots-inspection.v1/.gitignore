@@ -1,0 +1,6 @@
+artifacts/
+simulators/webots/generated/
+simulators/webots/scenes/*.generated.wbt
+__pycache__/
+.pytest_cache/
+*.py[cod]

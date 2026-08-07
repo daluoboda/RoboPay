@@ -1,0 +1,28 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "../generated/DobotCR3.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+
+WorldInfo {
+  basicTimeStep 16
+}
+Viewpoint {
+  orientation -0.33 0.12 0.936 2.45
+  position 1.25 -1.55 1.05
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+DirectionalLight {
+  direction -0.4 -0.5 -1
+  intensity 2.8
+}
+# BEGIN PROFILE_INSPECTION_MARKERS (rendered from dobot_cra_sim.course)
+# END PROFILE_INSPECTION_MARKERS
+DEF DOBOT_CR3 DobotCR3 {
+  translation 0 0 0
+  controller "dobot_cra_inspection_controller"
+  supervisor TRUE
+}

@@ -1,0 +1,39 @@
+schemaVersion: robot-profile.v1
+profileId: dobot.cra.cr3-mujoco-webots-inspection.v1
+profileVersion: 1.0.0
+vendor: dobot
+robotModel: cra-cr3
+robotId: dobot-cr3-sim-01
+robotType: fixed-base-6-axis-manipulator-simulator
+scope: simulator-only
+status: experimental
+runtime:
+  transport: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  metricsTopic: robot/dobot_cra_cr3/metrics
+  bridge: bridge/dobot_cra_sim/bridge.py
+  replayStore: artifacts/state/dobot_cr3_replay.sqlite3
+simulators:
+  - MuJoCo 3.3.0
+  - Webots R2025a
+modelIdentity:
+  label: Dobot CR3 six-axis arm from Dobot ROS 2 V4 source
+  source: https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4
+  sourceCommit: 0f67ed938c0cec4ed0808af759ddbb608e573dbe
+  sourceLicense: MIT
+  urdf: vendor/DOBOT_6Axis_ROS2_V4/cr3_robot.urdf
+  urdfSha256: 6a790fefbba0871f91819a8f8a29a5780b5952026d98396179b4eeb907859e66
+  webotsModel: Generated at run time from the same pinned vendor URDF; not vendor supplied.
+tunnelBoundary:
+  requiredContract: correlated-post-verification-action-event.v1
+  trust: >-
+    The bridge accepts only the private Tunnel-to-robot Zenoh boundary after
+    x402 verification. It rejects the legacy uncorrelated action event and
+    never verifies, settles, or stores a payment secret itself.
+  identityBinding: >-
+    Robot WebSocket identity-to-payee binding is an upstream shared
+    Tunnel/Gateway protocol responsibility. This simulator profile does not
+    invent a local EIP-signing protocol.
+maintainers:
+  - github: RobotDeveloper1
