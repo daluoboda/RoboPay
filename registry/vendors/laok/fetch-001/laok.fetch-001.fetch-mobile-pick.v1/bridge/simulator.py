@@ -1,13 +1,15 @@
-"""stack-arm-001 — MuJoCo backend for pick-and-stack (Tier 1).
+"""fetch-001 — MuJoCo backend for mobile pick-and-place (Tier 1).
 
-Key differentiator from pick_object:
-  * TWO cubes in the scene (A = pickable, B = stacking base).
-  * 7-phase controller: APPROACH → DESCEND → GRIP → LIFT → MOVE_ABOVE_B → PLACE → VERIFY.
-  * Cube-to-cube collision enabled so A physically lands on B.
-  * Success = A rests on B with verified stack stability.
+Key differentiator from stack-arm-001:
+  * ONE cube in the scene (A = pickable).
+  * 7-phase controller: APPROACH -> DESCEND -> GRIP -> LIFT -> MOVE_ABOVE_SHELF
+    -> PLACE -> VERIFY.
+  * A STATIC shelf (instead of a second dynamic cube) serves as the placement
+    surface, so the skill is a true pick-and-place.
+  * Success = cube A rests on the shelf with verified placement stability.
 
 Public surface:
-    MuJoCoSimulator().pick_and_stack(params) -> PickResult(success, reason, metrics)
+    MuJoCoSimulator().fetch_mobile_pick(params) -> PickResult(success, reason, metrics)
 """
 from __future__ import annotations
 
@@ -19,28 +21,29 @@ from arm_spec import (
     ARM_JOINTS, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
     FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
     GRASP_WZ, GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
-    OBSTACLE_RADIUS, PAD_HALF, PickResult, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, solve,
+    OBSTACLE_RADIUS, PAD_HALF, PickResult, SHELF_H, SHELF_HALF, SHELF_POS,
+    STAGE_STEPS, TIMESTEP, UNREACHABLE_GAP, WORK_R, aperture_at, blend,
+    build_metrics, solve,
 )
 
 ENGINE = "mujoco"
-STACK_STEPS = {"move_above_b": 80, "place": 60, "verify": 60}
+PLACE_STEPS = {"move_above_shelf": 80, "place": 60, "verify": 60}
 
-# Cube B position (fixed on table, serves as stacking base)
-CUBE_B_POS = (0.28, 0.0)  # xy on table
+# Shelf position (fixed on table, serves as placement surface)
+SHELF_XY = SHELF_POS
 
 
-# ------------------------------------------------------------------- dual-cube model --
-def _model_xml(cube_a_xy, cube_b_xy, obstacle_xy) -> str:
-    """MJCF with two cubes for stacking.
+# ------------------------------------------------------------------- single-cube model --
+def _model_xml(cube_a_xy, shelf_xy, obstacle_xy) -> str:
+    """MJCF with one cube and one static shelf for pick-and-place.
 
     Collision bitmasks:
-        1 floor   2 cube_A   2 cube_B   4 finger pads   8 obstacle   16 arm links
-    Cube_A collides with floor, cube_B, pads, obstacle (conaffinity=15).
-    Cube_B collides with floor, cube_A, obstacle (conaffinity=11).
+        1 floor   2 cube_A   2 shelf    4 finger pads   8 obstacle   16 arm links
+    Cube_A collides with floor, shelf, pads, obstacle (conaffinity=15).
+    Shelf collides with floor, cube_A, obstacle (conaffinity=11).
     """
     ax, ay = cube_a_xy
-    bx, by = cube_b_xy
+    sx, sy = shelf_xy
     obstacle = ""
     if obstacle_xy is not None:
         ox, oy = obstacle_xy
@@ -52,7 +55,7 @@ def _model_xml(cube_a_xy, cube_b_xy, obstacle_xy) -> str:
     </body>"""
 
     return f"""
-<mujoco model="stack-arm-001">
+<mujoco model="fetch-001">
   <compiler angle="radian" autolimits="true"/>
   <option timestep="{TIMESTEP}" gravity="0 0 -9.81" integrator="implicitfast"/>
   <default>
@@ -118,11 +121,11 @@ def _model_xml(cube_a_xy, cube_b_xy, obstacle_xy) -> str:
       <site name="cube_a_site" pos="0 0 0" size="0.006" rgba="0.2 0.9 0.5 0.4"/>
     </body>
 
-    <!-- cube B: stacking base (static on table) -->
-    <body name="cube_b" pos="{bx} {by} {CUBE_HALF}">
-      <freejoint name="cube_b_free"/>
-      <geom name="cube_b_g" type="box" size="{CUBE_HALF} {CUBE_HALF} {CUBE_HALF}"
-            mass="{CUBE_MASS}" rgba="0.70 0.40 0.20 1"
+    <!-- shelf: static placement surface (no freejoint) -->
+    <body name="shelf" pos="{sx} {sy} {SHELF_H}">
+      <geom name="shelf_g" type="box"
+            size="{SHELF_HALF} {SHELF_HALF} {SHELF_HALF}"
+            rgba="0.70 0.40 0.20 1"
             contype="2" conaffinity="11" friction="{CUBE_FRICTION} 0.05 0.001"
             solref="0.02 1" solimp="0.90 0.95 0.001"/>
     </body>{obstacle}
@@ -137,22 +140,23 @@ def _model_xml(cube_a_xy, cube_b_xy, obstacle_xy) -> str:
 
 # --------------------------------------------------------------- simulator --
 class MuJoCoSimulator:
-    """One instance == one robot. `pick_and_stack` rebuilds a dual-cube cell
-    and executes the full pick → lift → traverse → place → verify pipeline."""
+    """One instance == one robot. `fetch_mobile_pick` rebuilds a single-cube
+    cell and executes the full pick -> lift -> traverse -> place -> verify
+    pipeline onto a static shelf."""
 
-    ROBOT_ID = "stack-arm-001"
-    SKILL_ID = "pick_and_stack"
+    ROBOT_ID = "fetch-001"
+    SKILL_ID = "fetch_mobile_pick"
     ENGINE = ENGINE
 
     def __init__(self):
         self.model = None
         self.data = None
         self._steps = 0
-        self._budget = 400  # increased for stack
+        self._budget = 400  # generous for pick-and-place
 
     def _build(self, scene: dict):
         xml = _model_xml(scene.get("cube_a", scene.get("cube", [0.35, 0.0])),
-                         scene.get("cube_b", list(CUBE_B_POS)),
+                         scene.get("shelf", list(SHELF_XY)),
                          scene.get("obstacle"))
         self.model = mujoco.MjModel.from_xml_string(xml)
         self.data = mujoco.MjData(self.model)
@@ -168,9 +172,9 @@ class MuJoCoSimulator:
             self._vadr[name] = m.jnt_dofadr[jid]
 
         self._cube_a_geom = gid("cube_a_g")
-        self._cube_b_geom = gid("cube_b_g")
+        self._shelf_geom = gid("shelf_g")
         self._cube_a_body = bid("cube_a")
-        self._cube_b_body = bid("cube_b")
+        self._shelf_body = bid("shelf")
         self._finger_geoms = {gid("finger_l_g"), gid("finger_r_g")}
         self._obs_geom = gid("obstacle_g") if scene.get("obstacle") else -1
         self._arm_geoms = {gid(n) for n in ("base_g", "column_g", "upper_g", "fore_g", "wrist_g")}
@@ -253,8 +257,8 @@ class MuJoCoSimulator:
     def _cube_a_pos(self):
         return [float(v) for v in self.data.xpos[self._cube_a_body]]
 
-    def _cube_b_pos(self):
-        return [float(v) for v in self.data.xpos[self._cube_b_body]]
+    def _shelf_pos(self):
+        return [float(v) for v in self.data.xpos[self._shelf_body]]
 
     def _tip_pos(self):
         return np.array(self.data.site_xpos[self._grip_site], dtype=float)
@@ -273,16 +277,16 @@ class MuJoCoSimulator:
             self.model.eq_active[self._eq_id] = 0
         mujoco.mj_forward(self.model, self.data)
 
-    # -------------------------------------------------------- pick_and_stack skill
-    def pick_and_stack(self, params: dict | None = None) -> PickResult:
-        """7-phase stack controller:
-          1. move_above_a  — arm positions above cube A
-          2. descend_a     — lower to grasp height
-          3. grip_a        — contact-gated finger closure
-          4. lift_a        — raise cube A
-          5. move_above_b  — traverse to above cube B
-          6. place         — descend onto B and release
-          7. verify        — confirm A rests on B
+    # -------------------------------------------------------- fetch_mobile_pick skill
+    def fetch_mobile_pick(self, params: dict | None = None) -> PickResult:
+        """7-phase pick-and-place controller:
+          1. move_above_a   — arm positions above cube A
+          2. descend_a      — lower to grasp height
+          3. grip_a         — contact-gated finger closure
+          4. lift_a         — raise cube A
+          5. move_above_shelf — traverse to above the shelf
+          6. place          — descend onto shelf and release
+          7. verify         — confirm A rests on the shelf
         """
         scene = {}
         if params and isinstance(params, dict):
@@ -291,20 +295,20 @@ class MuJoCoSimulator:
         self._build(scene)
         self._budget = scene.get("budget", 500)
         start_a = self._cube_a_pos()
-        start_b = self._cube_b_pos()
+        start_shelf = self._shelf_pos()
         grasp_state, stage = "open", "home"
 
         def report(success, reason, note=""):
             end_a = self._cube_a_pos()
-            end_b = self._cube_b_pos()
-            stack_stable = (
+            end_shelf = self._shelf_pos()
+            place_stable = (
                 success and
-                end_a[2] > end_b[2] + 0.02 and  # A above B
-                abs(end_a[0] - end_b[0]) < 0.06 and  # XY aligned
-                abs(end_a[1] - end_b[1]) < 0.06
+                end_a[2] > end_shelf[2] + 0.02 and  # A above shelf top
+                abs(end_a[0] - end_shelf[0]) < 0.06 and  # XY aligned
+                abs(end_a[1] - end_shelf[1]) < 0.06
             )
             return PickResult(success, reason, build_metrics(
-                engine=ENGINE, obj="stack", scene_key="stack", stage=stage,
+                engine=ENGINE, obj="place", scene_key="place", stage=stage,
                 grasp_state=grasp_state,
                 start_pos=start_a, end_pos=end_a,
                 hold_force=(sum(self._hold_forces) / len(self._hold_forces)
@@ -313,22 +317,22 @@ class MuJoCoSimulator:
                 contact_samples=self._contact_samples,
                 collisions=self._collisions, steps=self._steps,
                 budget=self._budget, wall_time=time.perf_counter() - t0,
-                note=f"{note} | stack_stable={stack_stable} "
-                     f"a_z={end_a[2]:.4f} b_z={end_b[2]:.4f}"))
+                note=f"{note} | place_stable={place_stable} "
+                     f"a_z={end_a[2]:.4f} shelf_z={end_shelf[2]:.4f}"))
 
         # Position targets
         a_xy = np.array([start_a[0], start_a[1]])
-        b_xy = np.array([start_b[0], start_b[1]])
+        shelf_xy = np.array([start_shelf[0], start_shelf[1]])
 
         # Envelope check
         if float(np.hypot(a_xy[0], a_xy[1])) > WORK_R + 0.02:
             stage = "stretch"
             return report(False, "unreachable", "cube A out of workspace")
 
-        # Custom keyframes for cube B position
-        r_b = float(np.hypot(b_xy[0], b_xy[1]))
-        above_b = solve(r_b, GRASP_WZ + 0.14)
-        at_b = solve(r_b, GRASP_WZ)
+        # Custom keyframes for shelf position
+        r_shelf = float(np.hypot(shelf_xy[0], shelf_xy[1]))
+        above_shelf = solve(r_shelf, GRASP_WZ + 0.14)
+        at_shelf = solve(r_shelf, GRASP_WZ)
 
         try:
             # 1/7: MOVE_ABOVE_A
@@ -372,14 +376,14 @@ class MuJoCoSimulator:
                 grasp_state = "slipped"
                 return report(False, "grasp_failed", f"rose only {lifted:.3f}m")
 
-            # 5/7: MOVE_ABOVE_B — traverse to above cube B
-            stage = "move_above_b"
-            if not self._run(above_b, STACK_STEPS["move_above_b"], FINGER_CLOSED):
+            # 5/7: MOVE_ABOVE_SHELF — traverse to above the shelf
+            stage = "move_above_shelf"
+            if not self._run(above_shelf, PLACE_STEPS["move_above_shelf"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during traverse")
 
-            # 6/7: PLACE — descend onto B and release
+            # 6/7: PLACE — descend onto shelf and release
             stage = "place"
-            if not self._run(at_b, STACK_STEPS["place"], FINGER_CLOSED):
+            if not self._run(at_shelf, PLACE_STEPS["place"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during placement")
             # Release: open fingers, detach
             grasp_state = "release"
@@ -387,29 +391,29 @@ class MuJoCoSimulator:
             for _ in range(10):
                 self._tick(dict(self._pose), FINGER_OPEN)
 
-            # 7/7: VERIFY — confirm A rests on B
+            # 7/7: VERIFY — confirm A rests on shelf
             stage = "verify"
-            self._hold(STACK_STEPS["verify"], FINGER_OPEN, sample=False)
+            self._hold(PLACE_STEPS["verify"], FINGER_OPEN, sample=False)
 
         except BudgetExhausted:
             return report(False, "timeout",
                           f"budget {self._budget} exhausted in {stage}")
 
-        # Stack verification
+        # Placement verification
         end_a = self._cube_a_pos()
-        end_b = self._cube_b_pos()
-        a_above_b = end_a[2] > end_b[2] + 0.02
-        xy_aligned = abs(end_a[0] - end_b[0]) < 0.06 and abs(end_a[1] - end_b[1]) < 0.06
+        end_shelf = self._shelf_pos()
+        a_above_shelf = end_a[2] > end_shelf[2] + 0.02
+        xy_aligned = abs(end_a[0] - end_shelf[0]) < 0.06 and abs(end_a[1] - end_shelf[1]) < 0.06
 
-        if not a_above_b or not xy_aligned:
+        if not a_above_shelf or not xy_aligned:
             grasp_state = "off_target"
-            return report(False, "stack_failed",
-                          f"A_z={end_a[2]:.3f} B_z={end_b[2]:.3f} "
-                          f"dx={abs(end_a[0]-end_b[0]):.3f} dy={abs(end_a[1]-end_b[1]):.3f}")
+            return report(False, "place_failed",
+                          f"A_z={end_a[2]:.3f} shelf_z={end_shelf[2]:.3f} "
+                          f"dx={abs(end_a[0]-end_shelf[0]):.3f} dy={abs(end_a[1]-end_shelf[1]):.3f}")
 
-        grasp_state = "stacked"
-        return report(True, "stacked",
-                      f"cube A stacked on B: A_z={end_a[2]:.3f} > B_z={end_b[2]:.3f}")
+        grasp_state = "placed"
+        return report(True, "placed",
+                      f"cube A placed on shelf: A_z={end_a[2]:.3f} > shelf_z={end_shelf[2]:.3f}")
 
 
 __all__ = ["MuJoCoSimulator", "PickResult", "KEYFRAMES", "ENGINE"]

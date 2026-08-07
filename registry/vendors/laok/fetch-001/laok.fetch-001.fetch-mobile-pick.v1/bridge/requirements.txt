@@ -1,4 +1,4 @@
-# Runtime deps for the laok stack-arm-001 RoboPay bridge
+# Runtime deps for the laok fetch-001 RoboPay bridge
 zenoh>=1.0.0
 x402>=0.2.0
 eth-account>=0.13.0

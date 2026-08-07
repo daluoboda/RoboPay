@@ -10,7 +10,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bridge"))
-from laok_fetch_mobile_001_zenoh_bridge import Bridge, params_hash  # noqa: E402
+from laok_fetch_001_zenoh_bridge import Bridge, params_hash  # noqa: E402
 
 PAYEE = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
 ROBOT = "fetch-001-demo-001"
@@ -26,7 +26,7 @@ def paid(action_id, idem, auth, verified=True, expired=False, amount="100000"):
         "settled": False, "issuedAt": "2099-01-01T00:00:00Z",
         "expiresAt": "2000-01-01T00:00:00Z" if expired else "2099-01-01T00:05:00Z",
     }
-    return {"actionId": action_id, "robotId": ROBOT, "skillId": "fetch_mobile_fetch_mobile_pick",
+    return {"actionId": action_id, "robotId": ROBOT, "skillId": "fetch_mobile_pick",
             "params": params, "paramsHash": params_hash(params),
             "idempotencyKey": idem, "payment": pay}
 
@@ -38,14 +38,14 @@ def bridge():
 
 def test_skill_discoverable(bridge):
     sk = bridge.list_skills()["skills"][0]
-    assert sk["skillId"] == "fetch_mobile_fetch_mobile_pick"
+    assert sk["skillId"] == "fetch_mobile_pick"
     assert sk["paymentRequired"] is True
     assert sk["amount"] == "100000"
 
 
 def test_unpaid_challenged(bridge):
     code, resp = bridge.request_action(
-        {"actionId": "a", "robotId": ROBOT, "skillId": "fetch_mobile_fetch_mobile_pick",
+        {"actionId": "a", "robotId": ROBOT, "skillId": "fetch_mobile_pick",
          "params": {}, "paramsHash": params_hash({}), "idempotencyKey": "k", "payment": {}})
     assert code == 402
 
@@ -116,7 +116,7 @@ def pi_paid(action_id, idem, auth, amount="100000000"):
         "settled": False, "issuedAt": "2099-01-01T00:00:00Z",
         "expiresAt": "2099-01-01T00:05:00Z",
     }
-    return {"actionId": action_id, "robotId": ROBOT, "skillId": "fetch_mobile_fetch_mobile_pick",
+    return {"actionId": action_id, "robotId": ROBOT, "skillId": "fetch_mobile_pick",
             "params": params, "paramsHash": params_hash(params),
             "idempotencyKey": idem, "payment": pay}
 

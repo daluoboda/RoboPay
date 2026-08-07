@@ -5,7 +5,7 @@ robotType: simulated-manipulator
 profileId: laok.fetch-001.fetch-mobile-pick.v1
 profileVersion: 1.0.0
 
-displayName: "laok fetch-001 MuJoCo pick and stack"
+displayName: "laok fetch-001 MuJoCo pick and place"
 description: >-
   Simulated 4-DoF arm with a gripper (fetch-001) running a deterministic,
   physics-executed fetch-mobile-pick skill in the MuJoCo engine. The skill is
@@ -14,7 +14,7 @@ description: >-
 submission:
   scope: simulated
   tier: 1
-  customSkillEvidence: bridge/laok_fetch_mobile_001_zenoh_bridge.py
+  customSkillEvidence: bridge/laok_fetch_001_zenoh_bridge.py
 
 runtime:
   transport: zenoh
@@ -23,7 +23,7 @@ runtime:
   bridge: laok-fetch-001-zenoh
   controlStack:
     simulator: MuJoCo (mujoco-python)
-    controller: deterministic 5-phase fetch_mobile_pick policy
+    controller: deterministic 7-phase fetch_mobile_pick policy
     sdk: x402 + zenoh-python
 
 identity:

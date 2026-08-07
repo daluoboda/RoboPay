@@ -9,7 +9,7 @@ amountUnit: smallest
 payeeEnv: ROBOT_PAYEE_ADDRESS
 
 policies:
-  - skillId: fetch_mobile_fetch_mobile_pick
+  - skillId: fetch_mobile_pick
     required: true
     amount: "100000"
     displayAmount: "0.10 USDC"
@@ -40,7 +40,7 @@ policies:
 piNetworks:
   - pi-testnet
 piPolicies:
-  - skillId: fetch_mobile_fetch_mobile_pick
+  - skillId: fetch_mobile_pick
     amount: "100000000"
     displayAmount: "1 PI"
     assetSymbol: PI

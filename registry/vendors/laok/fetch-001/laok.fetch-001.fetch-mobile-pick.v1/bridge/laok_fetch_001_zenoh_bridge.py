@@ -41,7 +41,7 @@ except Exception:  # pragma: no cover
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROFILE_DIR = os.path.dirname(HERE)
 
-SKILL_ID = "fetch_mobile_fetch_mobile_pick"
+SKILL_ID = "fetch_mobile_pick"
 ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
 
