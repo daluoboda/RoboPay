@@ -32,6 +32,8 @@ except Exception:  # pragma: no cover
 
 FACILITATOR_URL = os.environ.get("X402_FACILITATOR", "https://x402.org/facilitator")
 
+TXHASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
