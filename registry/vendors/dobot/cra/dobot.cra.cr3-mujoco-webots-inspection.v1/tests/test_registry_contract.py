@@ -33,3 +33,25 @@ def test_registry_and_payment_policy_do_not_drift() -> None:
     assert {entry["price_usdc"] for entry in catalog} == {"0.001"}
     source = ROOT / profile["modelIdentity"]["urdf"]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == profile["modelIdentity"]["urdfSha256"]
+
+
+def test_profile_docs_and_public_action_examples_are_present() -> None:
+    """Keep the reviewer-facing profile material coupled to the registry."""
+    docs = ROOT / "docs"
+    assert (docs / "README.md").is_file()
+    assert (docs / "validation-report.md").is_file()
+    assert (docs / "evidence" / "evidence-manifest.yaml").is_file()
+
+    inspect_example = json.loads(
+        (ROOT / "examples" / "action-envelope.inspect_three_tags.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    stop_example = json.loads(
+        (ROOT / "examples" / "action-envelope.stop.json").read_text(encoding="utf-8")
+    )
+    for example, skill_id in ((inspect_example, INSPECTION_SKILL), (stop_example, STOP_SKILL)):
+        assert example["action"] == skill_id
+        assert example["robot_id"] == ROBOT_ID
+        assert example["action_id"] == example["idempotency_key"]
+        assert example["params"] == {}
