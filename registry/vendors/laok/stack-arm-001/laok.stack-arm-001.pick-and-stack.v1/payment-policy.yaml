@@ -35,3 +35,13 @@ policies:
         - pending
         - timeout
         - rejected
+
+# Pi Network payment support (Fabric Foundation x @PiCoreTeam partnership, Aug 2026)
+piNetworks:
+  - pi-testnet
+piPolicies:
+  - skillId: stack_arm_pick_and_stack
+    amount: "100000000"
+    displayAmount: "1 PI"
+    assetSymbol: PI
+    assetDecimals: 8
