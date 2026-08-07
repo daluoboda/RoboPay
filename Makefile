@@ -118,3 +118,5 @@ clean: bridge-clean
 	rm -rf bin/
 	rm -rf $(ZENOH_C_DIR)
 	go clean
+
+# fetch-001 CI trigger
