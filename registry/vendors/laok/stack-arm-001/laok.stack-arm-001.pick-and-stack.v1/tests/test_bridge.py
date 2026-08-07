@@ -106,6 +106,21 @@ def test_txhash_format_validation():
     assert not TXHASH_RE.match("0x" + "a" * 65)
 
 
+def pi_paid(action_id, idem, auth, amount="100000000"):
+    params = {}
+    pay = {
+        "provider": "x402", "network": "pi-testnet",
+        "asset": "native",
+        "amount": amount, "payTo": PAYEE,
+        "authorizationId": auth, "verified": True, "status": "authorized",
+        "settled": False, "issuedAt": "2099-01-01T00:00:00Z",
+        "expiresAt": "2099-01-01T00:05:00Z",
+    }
+    return {"actionId": action_id, "robotId": ROBOT, "skillId": "stack_arm_pick_and_stack",
+            "params": params, "paramsHash": params_hash(params),
+            "idempotencyKey": idem, "payment": pay}
+
+
 def test_pi_payment_accepted(bridge):
     """Pi Testnet payment is gated, accepted, executes, and triggers settlement."""
     code, resp = bridge.request_action(pi_paid("pi1", "kp1", "auth-pi1"))
