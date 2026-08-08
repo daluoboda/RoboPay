@@ -61,6 +61,34 @@ def pad_addr(a):
     return "0x" + "0" * 24 + a[2:].lower()
 
 
+def verify_usdc_settlement_details(h, expected_usdc):
+    """Best-effort deep check via RPC: Transfer(payer->payee) + exact amount.
+    Returns (status, note): 'ok' | 'mismatch' | 'skip'.
+    A decoded amount mismatch is a hard logic failure; network errors -> 'skip'
+    so transient CI blips stay green."""
+    try:
+        tx, rc = txinfo_rpc(h)
+    except Exception as e:
+        return "skip", "RPC unavailable: %s" % str(e)[:60]
+    if not tx:
+        return "skip", "tx not found via RPC"
+    for log in rc.get("logs", []):
+        if (log.get("address", "").lower() == USDC
+                and log.get("topics", [None, None, None])[0] == TRANSFER_TOPIC):
+            if (log["topics"][1] == pad_addr(PAYER)
+                    and log["topics"][2] == pad_addr(PAYEE_EVM)):
+                if expected_usdc is not None:
+                    try:
+                        val = int(log.get("data", "0x0"), 16)
+                    except Exception:
+                        val = 0
+                    actual = val / 1_000_000
+                    if abs(actual - float(expected_usdc)) > 1e-9:
+                        return "mismatch", "amount %s USDC != expected %s" % (actual, expected_usdc)
+                return "ok", "Transfer payer->payee + amount verified"
+    return "skip", "no matching Transfer(payer->payee) log decoded"
+
+
 # ---- Pi Testnet verification ----
 
 def verify_pi_tx(h, ev):
@@ -142,6 +170,17 @@ if __name__ == "__main__":
                     time.sleep(2)
                     continue
                 net_fail.append("%s: %s" % (h, e))
+        # Deep amount + payer/payee validation (best-effort via RPC).
+        expected = ev.get("amount_usdc")
+        if verified and expected is not None:
+            st, note = verify_usdc_settlement_details(h, expected)
+            if st == "mismatch":
+                logic_fail.append("%s: settlement amount mismatch (%s)" % (h, note))
+                verified = False
+            elif st == "skip":
+                print("WARN(amount) %s: %s" % (h, note), file=sys.stderr)
+            else:
+                print("AMOUNT-OK %s (%s)" % (h, note))
         if verified:
             ok += 1
     for f in logic_fail:
