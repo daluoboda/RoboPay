@@ -63,6 +63,8 @@ class PaymentGate:
         self.required = next(
             (p for p in policy.get("policies", []) if p.get("required")), None
         )
+        # Track on-chain tx hashes already gated, to reject replay.
+        self._seen_tx = set()
 
     def check(self, payment: dict) -> None:
         """Raise PaymentError if the payment is not an authorized, live gate."""
@@ -90,10 +92,14 @@ class PaymentGate:
         if str(payment.get("amount")) != str(expected):
             raise PaymentError("PAYMENT_AMOUNT", "amount mismatch")
         pay_to = payment.get("payTo", "")
-        if self.payee and pay_to and pay_to.lower() != self.payee.lower():
+        if self.payee and pay_to.lower() != self.payee.lower():
             # Allow the ${ENV} placeholder form.
             if pay_to != "${ROBOT_PAYEE_ADDRESS}":
                 raise PaymentError("PAYMENT_PAYEE", "payTo mismatch")
+        # Replay protection: an on-chain tx hash must not authorize twice.
+        tx_hash = payment.get("txHash") or payment.get("tx_hash")
+        if tx_hash and tx_hash in self._seen_tx:
+            raise PaymentError("PAYMENT_REPLAY", "txHash already used")
         if not payment.get("verified") or payment.get("status") != "authorized":
             raise PaymentError("PAYMENT_UNAUTHORIZED", "payment not authorized")
         if req.get("rejectAlreadySettled") and payment.get("settled"):
@@ -101,6 +107,9 @@ class PaymentGate:
         now = time.time()
         if payment.get("expiresAt") and _parse(payment["expiresAt"]) < now:
             raise PaymentError("PAYMENT_EXPIRED", "payment authorization expired")
+        # Mark the tx used only after every check above passed.
+        if tx_hash:
+            self._seen_tx.add(tx_hash)
 
 
 def build_requirements(payment: dict, payee: str) -> "PaymentRequirements":
