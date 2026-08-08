@@ -164,5 +164,46 @@ class TestTxHashShape(unittest.TestCase):
         self.assertFalse(TXHASH_RE.match("0x" + "a" * 63))
 
 
+# ---------------------------------------------------------------------------
+# Real MuJoCo correlation (reviewer: "correlated simulator result").
+# These run the ACTUAL physics backend (not MockExecutor) and prove the
+# simulator outcome is what drives settlement. Skipped where mujoco is not
+# installed so a CI image without the engine stays green.
+# ---------------------------------------------------------------------------
+try:
+    import mujoco  # noqa: F401
+    HAVE_MUJOCO = True
+except Exception:
+    HAVE_MUJOCO = False
+
+from flow.executor import MuJoCoExecutor  # noqa: E402
+
+
+@unittest.skipUnless(HAVE_MUJOCO, "mujoco not installed")
+class TestRealMuJoCoCorrelated(unittest.TestCase):
+    """The relay settles ONLY when the REAL physics backend succeeds."""
+
+    def test_real_mujoco_pick_succeeds(self):
+        ex = MuJoCoExecutor()
+        res = ex.execute("pick_object", {"object": "cube"})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.message}")
+        self.assertEqual(res.metrics.get("graspState"), "attached")
+        self.assertGreater(res.metrics.get("objectLifted", 0), 0.05)
+        self.assertEqual(res.metrics.get("collisionCount"), 0)
+
+    def test_relay_real_mujoco_success_settles(self):
+        from flow.relay import Relay
+        r = Relay(MuJoCoExecutor())
+        resp = r.handle({
+            "skill": "pick_object", "robotId": "fabric-arm-001",
+            "idempotencyKey": "k-mujoco-real",
+            "payment": valid_receipt(),
+            "params": {"object": "cube"},
+        })
+        self.assertEqual(resp["status"], "completed")
+        self.assertTrue(resp["settled"], "real sim success must settle")
+        self.assertEqual(resp["metrics"].get("engine"), "mujoco")
+
+
 if __name__ == "__main__":
     unittest.main()
