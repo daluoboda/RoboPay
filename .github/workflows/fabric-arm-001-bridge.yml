@@ -50,9 +50,10 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          # PyPI's zenoh tops out at 0.4.0; the skill pins >=1.0.0 (nonexistent).
-          # Strip that pin so dependency install succeeds; zenoh is an optional import.
-          ( for f in requirements.txt bridge/requirements.txt tests/requirements.txt; do [ -f "$f" ] && sed -i '/zenoh/d' "$f"; done ) || true
+          # The correct transport pin is `eclipse-zenoh>=1.0.0` (installable on
+          # PyPI; bare `zenoh` stops at 0.4.0 and is unrelated). Strip only a
+          # broken bare `zenoh` pin; never touch `eclipse-zenoh`.
+          ( for f in requirements.txt bridge/requirements.txt tests/requirements.txt; do [ -f "$f" ] && sed -i '/^[[:space:]]*zenoh[[:space:]<>=-]/d' "$f"; done ) || true
           pip install -r requirements.txt
           # payment-layer tests (flow/x402, test_x402) need these
           pip install "x402>=0.2.0" eth-account web3 httpx
@@ -82,4 +83,4 @@ jobs:
       - name: Assert YAML profiles match arm_spec & transport
         run: python -m pytest tests/test_profiles.py -q
       - name: Verify x402 settlement tx hashes on Base Sepolia
-        run: python "$GITHUB_WORKSPACE/verify_settlement.py"
+        run: timeout 120 python "$GITHUB_WORKSPACE/verify_settlement.py"
