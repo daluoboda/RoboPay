@@ -58,12 +58,18 @@ python laok_stack_arm_001_zenoh_bridge.py --port 8080
 
 ## What is proven
 
-- **Real on-chain settlement.** A live x402 payment was verified and settled on
-  Base Sepolia through the public facilitator. Tx
-  `0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2`,
-  on-chain status `1`, payer balance `19.8 → 19.7 USDC`.
-- **Real physics execution.** MuJoCo `pick_and_stack` lifted the object `0.1313 m`
-  with zero collisions.
+- **Real on-chain settlement.** Three live x402 payments were verified and
+  settled on Base Sepolia through the public facilitator, one per paid action.
+  First tx
+  `0xad4c5669e1a3351a69256e5c5d507efc939ed9e7cfe0ac8b0be90603a796d1d6`
+  (block `45125820`), on-chain status `1`, payer balance `19.5 → 19.4 USDC`.
+  Across all three the payer went `19.5 → 19.2 USDC`. Every hash is listed in
+  `x402-evidence.json` and re-checked against the chain by
+  `verify_settlement.py` in CI.
+- **Real physics execution.** MuJoCo `pick_and_stack` grasped cube A and set it
+  down on cube B: net rise `0.0502 m` (A comes to rest at z `0.0752 m`, B stays
+  at z `0.0250 m`), stack offset `0.0121 m` in XY, peak grip force `6.55 N`,
+  `450 / 500` steps, zero collisions.
 - **Async contract.** Unpaid → 402; paid → 202 accepted; correlated success
   result on the result topic; duplicate / replay / expired requests are
   rejected before any actuation; failure never settles.

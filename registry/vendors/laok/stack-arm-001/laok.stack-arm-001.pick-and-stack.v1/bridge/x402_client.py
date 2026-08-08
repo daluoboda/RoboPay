@@ -47,6 +47,24 @@ def _parse(ts: str) -> float:
         return 0.0
 
 
+_ENV_PLACEHOLDER = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+
+def resolve_payee_placeholder(value: str) -> str:
+    """Expand a literal ``${ENV_VAR}`` payTo into the configured address.
+
+    The shipped example envelopes carry the placeholder form, so we expand it
+    here instead of special-casing it in the gate. An unset variable expands to
+    "" which still fails the payee comparison, so the gate stays fail-closed.
+    """
+    if not isinstance(value, str):
+        return ""
+    m = _ENV_PLACEHOLDER.match(value.strip())
+    if m:
+        return os.environ.get(m.group(1), "")
+    return value
+
+
 class PaymentError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -91,11 +109,11 @@ class PaymentGate:
             expected = req.get("amount", "")
         if str(payment.get("amount")) != str(expected):
             raise PaymentError("PAYMENT_AMOUNT", "amount mismatch")
-        pay_to = payment.get("payTo", "")
+        # Resolve a ${ENV_VAR} placeholder before comparing. An unresolved or
+        # empty payTo must never skip this check.
+        pay_to = resolve_payee_placeholder(payment.get("payTo", ""))
         if self.payee and pay_to.lower() != self.payee.lower():
-            # Allow the ${ENV} placeholder form.
-            if pay_to != "${ROBOT_PAYEE_ADDRESS}":
-                raise PaymentError("PAYMENT_PAYEE", "payTo mismatch")
+            raise PaymentError("PAYMENT_PAYEE", "payTo mismatch")
         # Replay protection: an on-chain tx hash must not authorize twice.
         tx_hash = payment.get("txHash") or payment.get("tx_hash")
         if tx_hash and tx_hash in self._seen_tx:

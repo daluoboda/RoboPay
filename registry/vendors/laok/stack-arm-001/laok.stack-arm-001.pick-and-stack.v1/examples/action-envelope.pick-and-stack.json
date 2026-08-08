@@ -1,5 +1,5 @@
 {
-  "actionId": "act_laok_fabric_arm_001_example_001",
+  "actionId": "act_laok_stack_arm_001_example_001",
   "robotId": "stack-arm-001-demo-001",
   "skillId": "stack_arm_pick_and_stack",
   "params": {},

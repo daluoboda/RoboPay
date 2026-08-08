@@ -22,17 +22,24 @@ and robot behavior evidence are disclosed below.
 - [x] A real x402 payment was **verified and settled on Base Sepolia** through
   the public facilitator (`x402.org/facilitator`): signed EIP-3009
   `transferWithAuthorization` → `/verify` → `/settle`.
-  - Transaction: `0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2`
-  - Explorer: https://sepolia.basescan.org/tx/0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
-  - On-chain status: **1 (success)**
-  - Payer balance moved **19.8 → 19.7 USDC** (delta −0.10), payee received
-    +0.10 USDC. No faucet shortcut; this is a real settled transfer.
-- [x] The MuJoCo simulator **physically executed** the pick-and-place skill
+  - Transactions (one settlement per paid action, all on Base Sepolia):
+    1. `0xad4c5669e1a3351a69256e5c5d507efc939ed9e7cfe0ac8b0be90603a796d1d6` — block `45125820`, payer `19.5 → 19.4 USDC`
+    2. `0x4e7db1219898a98187227c4673505f4af61fe22c6a783ad03d8ad9dbe136e80d` — block `45125822`, payer `19.4 → 19.3 USDC`
+    3. `0x23439362ac5bf96f57296220c3d143e5442c18f08448c84fa6ca1e69d4e5137b` — block `45125825`, payer `19.3 → 19.2 USDC`
+  - Explorer: https://sepolia.basescan.org/tx/0xad4c5669e1a3351a69256e5c5d507efc939ed9e7cfe0ac8b0be90603a796d1d6
+  - On-chain status: **1 (success)** on all three
+  - Payer `0xA0723A2dA2bFa349919A467446Fb54569b2f3d13`, payee
+    `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`, **0.10 USDC** each. No faucet
+    shortcut; these are real settled transfers. `verify_settlement.py` re-reads
+    the ERC-20 Transfer logs of every hash and fails the build on any mismatch.
+- [x] The MuJoCo simulator **physically executed** the pick-and-stack skill
   after the payment gate opened:
-  - `SUCCESS = True`, reason `picked`
-  - Object lifted **0.1313 m** (start z 0.025 → end z 0.1563)
-  - Contact force **9.81 N**, peak **14.90 N**, contact samples 8
-  - Collision count **0**, steps used **260 / 400**, sim time **0.52 s**
+  - `SUCCESS = True`, reason `stacked`, graspState `stacked`
+  - Cube A grasped and placed on cube B: net rise **0.0502 m**
+    (start z `0.0250` → rest z `0.0752`), cube B unmoved at z `0.0250`
+  - Stack verified stable: `stackStable = true`, XY offset **0.0121 m**
+  - Contact force **6.55 N** mean, peak **6.55 N**, contact samples 8
+  - Collision count **0**, steps used **450 / 500**, sim time **0.90 s**
 - [x] The async **action/result contract** was exercised: a paid action was
   accepted (202) and a correlated result was delivered on the result topic
   (`robot/tunnel/result`), correlated by `actionId`.

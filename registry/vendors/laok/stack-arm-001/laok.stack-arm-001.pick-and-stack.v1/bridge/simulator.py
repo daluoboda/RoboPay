@@ -313,7 +313,15 @@ class MuJoCoSimulator:
                 collisions=self._collisions, steps=self._steps,
                 budget=self._budget, wall_time=time.perf_counter() - t0,
                 note=f"{note} | stack_stable={stack_stable} "
-                     f"a_z={end_a[2]:.4f} b_z={end_b[2]:.4f}"))
+                     f"a_z={end_a[2]:.4f} b_z={end_b[2]:.4f}",
+                extra={
+                    "stackStable": bool(stack_stable),
+                    "a_z": round(float(end_a[2]), 4),
+                    "b_z": round(float(end_b[2]), 4),
+                    "stackOffsetXY": round(
+                        float(np.hypot(end_a[0] - end_b[0],
+                                       end_a[1] - end_b[1])), 4),
+                }))
 
         # Position targets
         a_xy = np.array([start_a[0], start_a[1]])

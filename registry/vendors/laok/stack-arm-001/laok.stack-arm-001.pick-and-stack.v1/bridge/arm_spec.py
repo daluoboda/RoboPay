@@ -169,10 +169,11 @@ class BudgetExhausted(Exception):
 
 def build_metrics(*, engine, obj, scene_key, stage, grasp_state,
                   start_pos, end_pos, hold_force, peak_force, contact_samples,
-                  collisions, steps, budget, wall_time, note) -> dict:
+                  collisions, steps, budget, wall_time, note,
+                  extra=None) -> dict:
     """Identical metric schema for every backend."""
     delta = [round(end_pos[i] - start_pos[i], 4) + 0.0 for i in range(3)]
-    return {
+    record = {
         "robotId": "stack-arm-001",
         "skillId": "pick_and_stack",
         "engine": engine,
@@ -194,3 +195,9 @@ def build_metrics(*, engine, obj, scene_key, stage, grasp_state,
         "wallTime": round(wall_time, 4),
         "note": note,
     }
+    # Skill-specific success fields promoted to the top level so the
+    # successEvidence clauses in execution-mapping.yaml resolve against real
+    # metric keys instead of being buried in the free-text note.
+    if extra:
+        record.update(extra)
+    return record
