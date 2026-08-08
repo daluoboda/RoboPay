@@ -1,0 +1,12 @@
+[async-zenoh] pay-to-actuate loopback demo (zenoh router: tcp/7447, loopback)
+[async-zenoh] POST /v1/robots/sort-arm-001-demo-001/actions  ->  HTTP/1.1 402 Payment Required
+[async-zenoh] x402 accept: signing EIP-3009 transferWithAuthorization (payer 0xA0723A2d...b2f3d13)
+[async-zenoh] settle: txHash = 0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0  status = 1
+[async-zenoh] balance 19.2 -> 19.1 USDC  (delta -0.10)
+[async-zenoh] payment accepted, enqueue action a1 (skill sort_arm_pick_and_sort)
+[async-zenoh] publish actuation cmd over zenoh topic robopay/sort-arm-001-demo-001/cmd
+[async-zenoh] zenoh put OK  seq=1  bytes=104
+[async-zenoh] simulator ack: stage=approach -> grasp -> lift -> route -> release -> done
+[async-zenoh] graspState=released  success=True  reason=routed
+[async-zenoh] 1 Zenoh action published, 1 robot actuation performed
+[async-zenoh] pay-to-actuate over zenoh (loopback): OK

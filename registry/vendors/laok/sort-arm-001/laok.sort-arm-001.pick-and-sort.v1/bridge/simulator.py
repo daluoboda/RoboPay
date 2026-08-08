@@ -309,6 +309,11 @@ class MuJoCoSimulator:
         start_pos = self._cube_pos()
         bin_target = self._bin_pos(target_bin)
         grasp_state, stage = "open", "home"
+        # Highest the payload ever rises above its start height. A routing run
+        # ends with the object back on the table, so objectLifted is ~0 by
+        # design -- peakLift is the metric that proves the arm actually carried
+        # it through the air instead of dragging it across the surface.
+        self._peak_lift = 0.0
 
         def report(success, reason, note=""):
             end_pos = self._cube_pos()
@@ -327,7 +332,13 @@ class MuJoCoSimulator:
                 collisions=self._collisions, steps=self._steps,
                 budget=self._budget, wall_time=time.perf_counter() - t0,
                 note=f"{note} | target_bin={target_bin} routed={routed} "
-                     f"accuracy={accuracy:.4f}m"))
+                     f"accuracy={accuracy:.4f}m",
+                extra={
+                    "targetBin": target_bin,
+                    "routed": bool(routed),
+                    "accuracy": round(accuracy, 4),
+                    "peakLift": round(float(self._peak_lift), 4),
+                }))
 
         cube_xy = np.array([start_pos[0], start_pos[1]])
         planar = float(np.hypot(cube_xy[0], cube_xy[1]))
@@ -373,6 +384,8 @@ class MuJoCoSimulator:
             stage = "lift"
             if not self._run(KEYFRAMES["lift"], STAGE_STEPS["lift"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during lift")
+            self._peak_lift = max(self._peak_lift,
+                                  self._cube_pos()[2] - start_pos[2])
 
             # Compute custom keyframes for target bin
             bin_xy = np.array([bin_target[0], bin_target[1]])
@@ -385,6 +398,8 @@ class MuJoCoSimulator:
             stage = "route_to_bin"
             if not self._run(route_above, SORT_STEPS["route"], FINGER_CLOSED):
                 return report(False, "collision", "obstacle during route")
+            self._peak_lift = max(self._peak_lift,
+                                  self._cube_pos()[2] - start_pos[2])
 
             # 6/7 RELEASE at bin
             stage = "release"

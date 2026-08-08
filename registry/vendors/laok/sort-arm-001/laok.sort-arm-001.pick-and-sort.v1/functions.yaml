@@ -1,5 +1,5 @@
 schemaVersion: agent-functions.v1
-profileId: laok.sort-arm-001.pick-and-stack.v1
+profileId: laok.sort-arm-001.pick-and-sort.v1
 
 functions:
   - name: list_robot_skills

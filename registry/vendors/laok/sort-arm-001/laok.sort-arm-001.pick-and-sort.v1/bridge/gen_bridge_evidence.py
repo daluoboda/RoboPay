@@ -1,4 +1,4 @@
-"""Drive the laok stack-arm-001 bridge to produce live async evidence.
+"""Drive the laok sort-arm-001 bridge to produce live async evidence.
 
 Uses the in-process loopback transport (zenoh not required) so the async
 action/result contract is exercised and captured as a terminal log.
@@ -8,10 +8,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from laok_stack_arm_001_zenoh_bridge import Bridge, LoopbackTransport, params_hash
+from laok_sort_arm_001_zenoh_bridge import Bridge, LoopbackTransport, params_hash
 
 PAYEE = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-ROBOT = "stack-arm-001-demo-001"
+ROBOT = "sort-arm-001-demo-001"
 
 
 def paid(action_id, idem, auth, verified=True, expired=False):
@@ -24,7 +24,7 @@ def paid(action_id, idem, auth, verified=True, expired=False):
         "settled": False, "issuedAt": "2099-01-01T00:00:00Z",
         "expiresAt": "2000-01-01T00:00:00Z" if expired else "2099-01-01T00:05:00Z",
     }
-    return {"actionId": action_id, "robotId": ROBOT, "skillId": "stack_arm_pick_and_stack",
+    return {"actionId": action_id, "robotId": ROBOT, "skillId": "sort_arm_pick_and_sort",
             "params": params, "paramsHash": params_hash(params),
             "idempotencyKey": idem, "payment": pay}
 
@@ -34,12 +34,12 @@ def main():
     bridge.transport = LoopbackTransport(bridge.handle_action)
 
     print("=" * 70)
-    print(" laok stack-arm-001 — ASYNC PAY-TO-ACTUATE EVIDENCE (loopback transport)")
+    print(" laok sort-arm-001 — ASYNC PAY-TO-ACTUATE EVIDENCE (loopback transport)")
     print("=" * 70)
 
     print("\n[A] UNPAID REQUEST  ->  HTTP 402 + PAYMENT-REQUIRED")
     code, resp = bridge.request_action(
-        {"actionId": "a1", "robotId": ROBOT, "skillId": "stack_arm_pick_and_stack",
+        {"actionId": "a1", "robotId": ROBOT, "skillId": "sort_arm_pick_and_sort",
          "params": {}, "paramsHash": params_hash({}), "idempotencyKey": "k1", "payment": {}})
     print(f"    HTTP {code}  {resp}")
 

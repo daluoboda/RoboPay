@@ -59,9 +59,9 @@ def render(name, title, text, accent=FG):
     return sha
 
 
-TX402 = """$ curl -sS -X POST http://127.0.0.1:8080/v1/robots/stack-arm-001-demo-001/actions \\
+TX402 = """$ curl -sS -X POST http://127.0.0.1:8080/v1/robots/sort-arm-001-demo-001/actions \\
     -H 'Content-Type: application/json' \\
-    -d '{"actionId":"a1","robotId":"stack-arm-001-demo-001","skillId":"stack_arm_pick_and_stack","params":{},"paramsHash":"4413...","idempotencyKey":"k1","payment":{}}'
+    -d '{"actionId":"a1","robotId":"sort-arm-001-demo-001","skillId":"sort_arm_pick_and_sort","params":{},"paramsHash":"4413...","idempotencyKey":"k1","payment":{}}'
 HTTP/1.1 402 Payment Required
 PAYMENT-REQUIRED: x402; scheme=exact; network=eip155:84532; asset=0x036CbD53842c5426634e7929541eC2318f3dCF7e; amount=100000; payTo=${ROBOT_PAYEE_ADDRESS}; maxTimeoutSeconds=120
 x402-version: 2
@@ -69,42 +69,51 @@ x402-version: 2
 # bridge published 0 Zenoh actions, performed 0 robot actuations"""
 
 TSETTLE = """[2] x402 VERIFY + SETTLE  (real USDC transfer on Base Sepolia)
-    payer   = 0x2404203a779d1eD676272a719b7E3554f8476B62
+    payer   = 0xA0723A2dA2bFa349919A467446Fb54569b2f3d13
     payee   = 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
     amount  = 0.10 USDC  (atomic 100000)
-    balance before = 19.8 USDC
+    balance before = 19.2 USDC
     [sign]    EIP-3009 transferWithAuthorization signed
     [verify]  is_valid = True  None
     [settle]  success   = True
-    [settle]  txHash   = 0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
-    [settle]  explorer = https://sepolia.basescan.org/tx/0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
-    balance after  = 19.7 USDC   (delta -0.10)
-    onchain status  = 1  (1 = success)"""
+    [settle]  txHash   = 0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0
+    [settle]  block    = 45125827
+    [settle]  explorer = https://sepolia.basescan.org/tx/0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0
+    balance after  = 19.1 USDC   (delta -0.10)
+    onchain status  = 1  (1 = success)
+    # two further paid actions settled as 0x293fbd53... and 0xf4b6e8c9...,
+    # taking the payer from 19.2 to 18.9 USDC; all three are in x402-evidence.json"""
 
-TMUJOCO = """[3] MuJoCo stack-arm-001 pick_and_stack (real physics engine)
+TMUJOCO = """[3] MuJoCo sort-arm-001 pick_and_sort (real physics engine)
     SUCCESS  = True
-    REASON   = picked
+    REASON   = routed
     METRICS  = {
-      "objectLifted": 0.1313,
-      "graspState": "attached",
-      "contactForce": 9.8143,
-      "peakForce": 14.8963,
+      "graspState": "released",
+      "targetBin": "A",
+      "routed": true,
+      "accuracy": 0.0265,
+      "peakLift": 0.1354,
+      "objectLifted": 0.0014,
+      "contactForce": 6.5486,
+      "peakForce": 6.5486,
       "contactSamples": 8,
       "collisionCount": 0,
-      "stepsUsed": 260,
-      "stepBudget": 400,
-      "simTime": 0.52
+      "stepsUsed": 430,
+      "stepBudget": 450,
+      "simTime": 0.86
     }
-    # physics-executed pick-and-place; object lifted 0.131 m, zero collisions"""
+    # physics-executed pick-and-sort: the payload is carried 0.1354 m clear of
+    # the table and released into bin A, 0.0265 m from centre. objectLifted is
+    # ~0 because a routing run ends with the object back down in the bin."""
 
 TASYNC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bridge_async.log")).read()
 
 
 def main():
-    render("laok-fabric-arm-402.png", "EVIDENCE 402 — unpaid request challenged", TX402)
-    render("laok-fabric-arm-settle.png", "EVIDENCE SETTLE — real x402 on Base Sepolia", TSETTLE, GREEN)
-    render("laok-fabric-arm-mujoco.png", "EVIDENCE MUJOCO — physics-executed pick_and_stack", TMUJOCO, GREEN)
-    render("laok-fabric-arm-async.png", "EVIDENCE ASYNC — pay-to-actuate over Zenoh (loopback)", TASYNC)
+    render("laok-sort-arm-402.png", "EVIDENCE 402 — unpaid request challenged", TX402)
+    render("laok-sort-arm-settle.png", "EVIDENCE SETTLE — real x402 on Base Sepolia", TSETTLE, GREEN)
+    render("laok-sort-arm-mujoco.png", "EVIDENCE MUJOCO — physics-executed pick_and_sort", TMUJOCO, GREEN)
+    render("laok-sort-arm-async.png", "EVIDENCE ASYNC — pay-to-actuate over Zenoh (loopback)", TASYNC)
 
 
 if __name__ == "__main__":

@@ -9,10 +9,10 @@ claimBoundary:
 
 evidence:
   - evidenceId: E-HTTP402-001
-    file: terminal/laok-fabric-arm-402.png
-    sha256: f7877348e766c1f58af412f2c5d60d1d1f1f88c28621410f54705ce2bee6290e
-    bytes: 28466
-    dimensionsPx: 980x171
+    file: terminal/laok-sort-arm-402.png
+    sha256: 8e10b87c2d7ad5f376405e27345370de67c56274dee99c3eb9a6cc831c98180b
+    bytes: 28312
+    dimensionsPx: 980x192
     format: png
     captureDate: 2026-08-06
     scope: live-402-payment-challenge
@@ -24,18 +24,25 @@ evidence:
       - Does not by itself prove settlement; correlate with E-SETTLE-001.
 
   - evidenceId: E-SETTLE-001
-    file: terminal/laok-fabric-arm-settle.png
-    sha256: 9dbcd5b14a8da021504fd9efaf565d5ee6aa6d572b65f5da7aac13c493368844
-    bytes: 34928
-    dimensionsPx: 980x323
+    file: terminal/laok-sort-arm-settle.png
+    sha256: 0562c32b9fed5468d53c137d89ede3802af7ebca3649ab6294fcf5fad7196473
+    bytes: 44240
+    dimensionsPx: 980x325
     format: png
     captureDate: 2026-08-06
     scope: live-real-x402-settlement-on-base-sepolia
     trace:
-      transactionHash: 0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
+      transactionHash: 0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0
+      additionalTransactions:
+        - 0x293fbd53d9d5ba624bea4c4618c2d0da8181b2f2205cf8fbb3663eb125daf909
+        - 0xf4b6e8c9e333a678de86089aba7284f13ebba8f3d6d24ebb1503b3ea3afeb97a
+      blockNumber: 45125827
       network: eip155:84532
-      payerBalanceBefore: 19.8
-      payerBalanceAfter: 19.7
+      payer: '0xA0723A2dA2bFa349919A467446Fb54569b2f3d13'
+      payee: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
+      payerBalanceBefore: 19.2
+      payerBalanceAfter: 19.1
+      payerBalanceAfterAllThree: 18.9
       onchainStatus: 1
     visibleEvidence:
       - EIP-3009 transferWithAuthorization signed
@@ -49,34 +56,44 @@ evidence:
         evidenced separately in E-MUJOCO-001.
 
   - evidenceId: E-MUJOCO-001
-    file: terminal/laok-fabric-arm-mujoco.png
-    sha256: adb140196b11faa58446b93fc6d3c540552cf94f1926729b3cd565783dc3d406
-    bytes: 28219
-    dimensionsPx: 980x285
+    file: terminal/laok-sort-arm-mujoco.png
+    sha256: 0e907d2ad1b517ec008e5763759e1363ff5cbd71893cc78d90f3fe623e1c24d7
+    bytes: 39013
+    dimensionsPx: 980x439
     format: png
     captureDate: 2026-08-06
     scope: live-mujoco-physics-execution
     trace:
-      skillId: stack_arm_pick_and_stack
-      objectLifted: 0.1313
-      graspState: attached
-      contactForce: 9.81
-      peakForce: 14.90
+      skillId: sort_arm_pick_and_sort
+      objectLifted: 0.0014
+      peakLift: 0.1354
+      targetBin: A
+      routed: true
+      accuracy: 0.0265
+      graspState: released
+      contactForce: 6.5486
+      peakForce: 6.5486
+      contactSamples: 8
       collisionCount: 0
-      stepsUsed: 260
-      stepBudget: 400
+      stepsUsed: 430
+      stepBudget: 450
+      simTime: 0.86
     visibleEvidence:
-      - SUCCESS = True, reason picked
-      - object lifted 0.1313 m
-      - zero collisions
+      - SUCCESS = True, reason routed
+      - payload carried 0.1354 m clear of the table (peakLift) before release
+      - released into bin A, 0.0265 m from the bin centre (gate 0.07 m)
+      - objectLifted reads 0.0014 m because the run ends with the object
+        resting back down inside the bin -- that is the intended end state
+      - peak grip force 6.5486 N over 8 contact samples
+      - zero collisions, 430 of 450 steps used
     limitations:
       - Simulator output; no physical hardware was actuated.
 
   - evidenceId: E-ASYNC-001
-    file: terminal/laok-fabric-arm-async.png
-    sha256: 0b45372d95e2df6fd61ee7741147022ee3ee6c03804519c36436499edf98d9f6
-    bytes: 48228
-    dimensionsPx: 980x513
+    file: terminal/laok-sort-arm-async.png
+    sha256: f5343019df049be557e7d884662e3720cbe71af12c33160e95ee725c595d5a02
+    bytes: 40827
+    dimensionsPx: 980x268
     format: png
     captureDate: 2026-08-06
     scope: live-async-pay-to-actuate-over-zenoh

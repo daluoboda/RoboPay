@@ -46,6 +46,7 @@ mappings:
         - graspState equals released
         - routed equals true
         - accuracy lessThan 0.07
+        - peakLift greater than 0.05
         - collisionCount equals 0
     failure:
       modes:

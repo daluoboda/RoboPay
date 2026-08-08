@@ -22,17 +22,27 @@ and robot behavior evidence are disclosed below.
 - [x] A real x402 payment was **verified and settled on Base Sepolia** through
   the public facilitator (`x402.org/facilitator`): signed EIP-3009
   `transferWithAuthorization` → `/verify` → `/settle`.
-  - Transaction: `0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2`
-  - Explorer: https://sepolia.basescan.org/tx/0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
-  - On-chain status: **1 (success)**
-  - Payer balance moved **19.8 → 19.7 USDC** (delta −0.10), payee received
-    +0.10 USDC. No faucet shortcut; this is a real settled transfer.
+  - Transactions (one settlement per paid action, all on Base Sepolia):
+    1. `0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0` — block `45125827`, payer `19.2 → 19.1 USDC`
+    2. `0x293fbd53d9d5ba624bea4c4618c2d0da8181b2f2205cf8fbb3663eb125daf909` — block `45125830`, payer `19.1 → 19.0 USDC`
+    3. `0xf4b6e8c9e333a678de86089aba7284f13ebba8f3d6d24ebb1503b3ea3afeb97a` — block `45125832`, payer `19.0 → 18.9 USDC`
+  - Explorer: https://sepolia.basescan.org/tx/0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0
+  - On-chain status: **1 (success)** on all three
+  - Payer `0xA0723A2dA2bFa349919A467446Fb54569b2f3d13`, payee
+    `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`, **0.10 USDC** each. No faucet
+    shortcut; these are real settled transfers. `verify_settlement.py` re-reads
+    the ERC-20 Transfer logs of every hash and fails the build on any mismatch.
 - [x] The MuJoCo simulator **physically executed** the pick-and-sort skill
   after the payment gate opened:
-  - `SUCCESS = True`, reason `picked`
-  - Object lifted **0.1313 m** (start z 0.025 → end z 0.1563)
-  - Contact force **9.81 N**, peak **14.90 N**, contact samples 8
-  - Collision count **0**, steps used **260 / 400**, sim time **0.52 s**
+  - `SUCCESS = True`, reason `routed`, graspState `released`
+  - Object grasped, carried and released into bin **A**: start
+    `(0.350, 0.000, 0.025)` → rest `(0.245, 0.110, 0.026)`
+  - **`peakLift` 0.1354 m** — the payload is lifted clear of the table and
+    carried through the air; `objectLifted` reads only **0.0014 m** because a
+    routing run deliberately ends with the object back down in the bin
+  - Placement accuracy **0.0265 m** from bin centre (`routed = true`, gate 0.07 m)
+  - Contact force **6.55 N** mean, peak **6.55 N**, contact samples 8
+  - Collision count **0**, steps used **430 / 450**, sim time **0.86 s**
 - [x] The async **action/result contract** was exercised: a paid action was
   accepted (202) and a correlated result was delivered on the result topic
   (`robot/tunnel/result`), correlated by `actionId`.
@@ -80,13 +90,13 @@ The profile tests cover:
 - canonical `paramsHash`, expiry, payment-policy, and wrong-robot rejection;
 - durable duplicate suppression and idempotency conflict;
 - structured success/error results and settlement eligibility;
-- MuJoCo pick_and_stack completion and abort-on-failure.
+- MuJoCo pick_and_sort completion and abort-on-failure.
 
 ```text
 python -m pytest tests/ -q
 # recorded before PR: all tests passed
 
-python -m py_compile bridge/laok_stack_arm_001_zenoh_bridge.py bridge/x402_client.py
+python -m py_compile bridge/laok_sort_arm_001_zenoh_bridge.py bridge/x402_client.py
 # recorded before PR: compiled without error
 
 python -c "import zenoh; print(type(zenoh.Config()).__name__)"
