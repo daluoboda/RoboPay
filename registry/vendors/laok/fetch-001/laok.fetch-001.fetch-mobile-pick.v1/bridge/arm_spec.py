@@ -47,7 +47,16 @@ STAGE_STEPS = {
     "settle": 20,
 }
 NOMINAL_STEPS = sum(STAGE_STEPS.values())
-DEFAULT_BUDGET = 400            # generous; only the `timeout` scenario clips it
+
+# fetch-001 is pick-AND-place, so the plan above is only half of it: after the
+# lift the arm still has to traverse, lower onto the shelf, release and verify.
+PLACE_STEPS = {"move_above_shelf": 80, "place": 60, "verify": 60}
+RELEASE_STEPS = 10              # ticks spent opening the fingers after detach
+PLACE_PLAN_STEPS = sum(PLACE_STEPS.values()) + RELEASE_STEPS
+
+# Derived, never hand-typed: a hand-typed budget smaller than the trajectory it
+# is supposed to cover turns every nominal run into a spurious `timeout`.
+DEFAULT_BUDGET = NOMINAL_STEPS + PLACE_PLAN_STEPS + 100   # 260 + 210 + margin
 
 # --------------------------------------------------------------- decisions --
 GRASP_FORCE_MIN = 0.30          # N, minimum measured normal force to hold
@@ -60,8 +69,11 @@ WORK_R = 0.35
 
 # Shelf: static placement surface for pick-and-place (cube A rests on top).
 SHELF_POS = (0.28, 0.0)   # xy on table
-SHELF_H = 0.18            # top surface height of the shelf (m)
+SHELF_H = 0.18            # z of the shelf box CENTRE, i.e. its body origin (m)
 SHELF_HALF = 0.06         # half-size of the shelf box
+# The surface cube A must end up on. Derived, never hand-typed: the box is
+# centred on SHELF_H, so its top face sits one half-size higher.
+SHELF_TOP = SHELF_H + SHELF_HALF          # 0.24 m
 
 SCENES = {
     "cube": {"cube": (0.35, 0.0), "shelf": SHELF_POS, "obstacle": None, "budget": DEFAULT_BUDGET},
@@ -179,10 +191,17 @@ class BudgetExhausted(Exception):
 
 def build_metrics(*, engine, obj, scene_key, stage, grasp_state,
                   start_pos, end_pos, hold_force, peak_force, contact_samples,
-                  collisions, steps, budget, wall_time, note) -> dict:
-    """Identical metric schema for every backend."""
+                  collisions, steps, budget, wall_time, note,
+                  extra=None) -> dict:
+    """Identical metric schema for every backend.
+
+    `extra` promotes skill-specific success fields (e.g. placeStable / a_z /
+    shelf_z for fetch-001) to the top level of the record so the
+    successEvidence clauses in execution-mapping.yaml can resolve against real
+    metric keys instead of being buried in the free-text `note`.
+    """
     delta = [round(end_pos[i] - start_pos[i], 4) + 0.0 for i in range(3)]
-    return {
+    record = {
         "robotId": "fetch-001",
         "skillId": "fetch_mobile_pick",
         "engine": engine,
@@ -204,3 +223,6 @@ def build_metrics(*, engine, obj, scene_key, stage, grasp_state,
         "wallTime": round(wall_time, 4),
         "note": note,
     }
+    if extra:
+        record.update(extra)
+    return record

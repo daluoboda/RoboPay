@@ -20,17 +20,24 @@ import numpy as np
 from arm_spec import (
     ARM_JOINTS, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
     FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
-    GRASP_WZ, GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
-    OBSTACLE_RADIUS, PAD_HALF, PickResult, SHELF_H, SHELF_HALF, SHELF_POS,
-    STAGE_STEPS, TIMESTEP, UNREACHABLE_GAP, WORK_R, aperture_at, blend,
-    build_metrics, solve,
+    DEFAULT_BUDGET, GRASP_WZ, GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2,
+    OBSTACLE_HALF_H, OBSTACLE_RADIUS, PAD_HALF, PLACE_STEPS, PickResult,
+    RELEASE_STEPS, SHELF_H, SHELF_HALF, SHELF_POS, SHELF_TOP, STAGE_STEPS,
+    TIMESTEP, UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, solve,
 )
 
 ENGINE = "mujoco"
-PLACE_STEPS = {"move_above_shelf": 80, "place": 60, "verify": 60}
 
 # Shelf position (fixed on table, serves as placement surface)
 SHELF_XY = SHELF_POS
+
+# Wrist heights for the place phase, derived from the shelf's TOP FACE.
+# While cube A is gripped, wrist_z == cube_centre_z + GRIP_MID, so a cube
+# resting on the shelf corresponds to wrist_z = SHELF_TOP + CUBE_HALF + GRIP_MID.
+PLACE_WZ = SHELF_TOP + CUBE_HALF + GRIP_MID + 0.004   # release 4 mm above the face
+# Traverse height: the carried cube must clear the shelf instead of being
+# dragged through it on the way over.
+CLEAR_WZ = PLACE_WZ + 0.10
 
 
 # ------------------------------------------------------------------- single-cube model --
@@ -293,7 +300,7 @@ class MuJoCoSimulator:
             scene = params
         t0 = time.perf_counter()
         self._build(scene)
-        self._budget = scene.get("budget", 500)
+        self._budget = scene.get("budget", DEFAULT_BUDGET)
         start_a = self._cube_a_pos()
         start_shelf = self._shelf_pos()
         grasp_state, stage = "open", "home"
@@ -318,7 +325,15 @@ class MuJoCoSimulator:
                 collisions=self._collisions, steps=self._steps,
                 budget=self._budget, wall_time=time.perf_counter() - t0,
                 note=f"{note} | place_stable={place_stable} "
-                     f"a_z={end_a[2]:.4f} shelf_z={end_shelf[2]:.4f}"))
+                     f"a_z={end_a[2]:.4f} shelf_z={end_shelf[2]:.4f}",
+                extra={
+                    "placeStable": bool(place_stable),
+                    "a_z": round(float(end_a[2]), 4),
+                    "shelf_z": round(float(end_shelf[2]), 4),
+                    "xyOffset": round(
+                        abs(float(end_a[0]) - float(end_shelf[0]))
+                        + abs(float(end_a[1]) - float(end_shelf[1])), 4),
+                }))
 
         # Position targets
         a_xy = np.array([start_a[0], start_a[1]])
@@ -331,8 +346,11 @@ class MuJoCoSimulator:
 
         # Custom keyframes for shelf position
         r_shelf = float(np.hypot(shelf_xy[0], shelf_xy[1]))
-        above_shelf = solve(r_shelf, GRASP_WZ + 0.14)
-        at_shelf = solve(r_shelf, GRASP_WZ)
+        above_shelf = solve(r_shelf, CLEAR_WZ)
+        at_shelf = solve(r_shelf, PLACE_WZ)
+        if above_shelf is None or at_shelf is None:      # pragma: no cover
+            stage = "stretch"
+            return report(False, "unreachable", "shelf top out of workspace")
 
         try:
             # 1/7: MOVE_ABOVE_A
@@ -388,7 +406,7 @@ class MuJoCoSimulator:
             # Release: open fingers, detach
             grasp_state = "release"
             self._detach()
-            for _ in range(10):
+            for _ in range(RELEASE_STEPS):
                 self._tick(dict(self._pose), FINGER_OPEN)
 
             # 7/7: VERIFY — confirm A rests on shelf

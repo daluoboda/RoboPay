@@ -1,0 +1,103 @@
+schemaVersion: robopay-evidence.v1
+profileId: laok.fetch-001.fetch-mobile-pick.v1
+
+claimBoundary:
+  live: Live x402 verify+settle on Base Sepolia (real on-chain USDC transfer) and
+    live MuJoCo physics execution, both performed for this submission.
+  notClaimed: A publication video of the simulator motion is not included; the
+    MuJoCo result metrics are the authoritative execution evidence.
+
+evidence:
+  - evidenceId: E-HTTP402-001
+    file: terminal/laok-fetch-arm-402.png
+    sha256: 25ab1656e50512fef1d492e5736133f3e7c35f20dfad683edf8b38a13feea165
+    bytes: 28704
+    dimensionsPx: 980x192
+    format: png
+    captureDate: 2026-08-06
+    scope: live-402-payment-challenge
+    visibleEvidence:
+      - HTTP/1.1 402 Payment Required
+      - PAYMENT-REQUIRED header advertising x402 exact scheme
+      - errorCode PAYMENT_REQUIRED
+    limitations:
+      - Does not by itself prove settlement; correlate with E-SETTLE-001.
+
+  - evidenceId: E-SETTLE-001
+    file: terminal/laok-fetch-arm-settle.png
+    sha256: 289a51899b9f6be1e092cd5491e6045309d6c4e002833afa99fe4149567a8f2d
+    bytes: 39741
+    dimensionsPx: 980x306
+    format: png
+    captureDate: 2026-08-06
+    scope: live-real-x402-settlement-on-base-sepolia
+    trace:
+      transactionHash: 0xef567bf8a100cbb3fe8745606f13576d76e81e8fc64365e78ed57496f4321bcb
+      blockNumber: 45165822
+      network: eip155:84532
+      payer: '0xA0723A2dA2bFa349919A467446Fb54569b2f3d13'
+      payee: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
+      payerBalanceBefore: 18.7
+      payerBalanceAfter: 18.6
+      onchainStatus: 1
+    visibleEvidence:
+      - EIP-3009 transferWithAuthorization signed
+      - facilitator /verify is_valid = True
+      - facilitator /settle success = True
+      - real txHash on Base Sepolia
+      - payer balance delta -0.10 USDC
+      - onchain status 1 (success)
+    limitations:
+      - The settlement is the live payment gate proof; the simulator run is
+        evidenced separately in E-MUJOCO-001.
+
+  - evidenceId: E-MUJOCO-001
+    file: terminal/laok-fetch-arm-mujoco.png
+    sha256: e505f1f391fd77b77695890d2556e47c67717b6085db87dbec2107de11c9c79a
+    bytes: 40417
+    dimensionsPx: 980x439
+    format: png
+    captureDate: 2026-08-06
+    scope: live-mujoco-physics-execution
+    trace:
+      skillId: fetch_mobile_pick
+      objectLifted: 0.2425
+      a_z: 0.2675
+      shelf_z: 0.18
+      placeStable: true
+      xyOffset: 0.0245
+      graspState: placed
+      contactForce: 6.5486
+      peakForce: 6.5486
+      contactSamples: 8
+      collisionCount: 0
+      stepsUsed: 450
+      stepBudget: 570
+      simTime: 0.9
+    visibleEvidence:
+      - SUCCESS = True, reason placed
+      - cube A rises 0.2425 m net and comes to rest at z 0.2675 m
+      - shelf top is at z 0.1800 m, so A is genuinely placed on the shelf
+      - placement verified stable, XY offset 0.0245 m
+      - peak grip force 6.5486 N over 8 contact samples
+      - zero collisions, 450 of 570 steps used
+    limitations:
+      - Simulator output; no physical hardware was actuated.
+
+  - evidenceId: E-ASYNC-001
+    file: terminal/laok-fetch-arm-async.png
+    sha256: 0c7e8002295be2eb4708af87481bd7b9b06a547b23096ddee800214cdc246356
+    bytes: 40863
+    dimensionsPx: 980x268
+    format: png
+    captureDate: 2026-08-06
+    scope: live-async-pay-to-actuate-over-zenoh
+    visibleEvidence:
+      - unpaid request -> 402, 0 Zenoh actions
+      - valid paid action -> 202 accepted, correlated success result
+      - duplicate idempotencyKey -> DUPLICATE, no second execution
+      - payment authorizationId replay -> PAYMENT_AUTHORIZATION_REPLAY
+      - expired authorization -> 402 PAYMENT_EXPIRED
+    limitations:
+      - With zenoh not installed the bridge used the in-process loopback
+        transport; the action/result topics and correlation are identical.
