@@ -1,4 +1,4 @@
-"""laok stack-arm-001 RoboPay bridge (Tier 1 simulated manipulator).
+"""laok push-arm-001 RoboPay bridge (Tier 1 simulated manipulator).
 
 Pay-to-Actuate path
 -------------------
@@ -342,7 +342,7 @@ def make_handler(bridge: Bridge):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot-id", default=os.environ.get("ROBOT_ID", "stack-arm-001-demo-001"))
+    ap.add_argument("--robot-id", default=os.environ.get("ROBOT_ID", "push-arm-001-demo-001"))
     ap.add_argument("--payee", default=os.environ.get("ROBOT_PAYEE_ADDRESS", ""))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)

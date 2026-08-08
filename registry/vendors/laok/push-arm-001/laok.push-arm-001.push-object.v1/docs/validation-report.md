@@ -22,17 +22,23 @@ and robot behavior evidence are disclosed below.
 - [x] A real x402 payment was **verified and settled on Base Sepolia** through
   the public facilitator (`x402.org/facilitator`): signed EIP-3009
   `transferWithAuthorization` → `/verify` → `/settle`.
-  - Transaction: `0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2`
-  - Explorer: https://sepolia.basescan.org/tx/0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2
+  - Transactions (one settlement per paid action, all on Base Sepolia):
+    1. `0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba` — block `45125835`, payer `18.9 → 18.8 USDC`
+    2. `0x3d9cbff38cc74a836effaae040244b9c06b07b90dac774c8223cc480e296483e` — block `45125837`, payer `18.8 → 18.7 USDC`
+  - Explorer: https://sepolia.basescan.org/tx/0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba
   - On-chain status: **1 (success)**
   - Payer balance moved **19.8 → 19.7 USDC** (delta −0.10), payee received
     +0.10 USDC. No faucet shortcut; this is a real settled transfer.
 - [x] The MuJoCo simulator **physically executed** the push-object skill
   after the payment gate opened:
-  - `SUCCESS = True`, reason `picked`
-  - Object lifted **0.1313 m** (start z 0.025 → end z 0.1563)
-  - Contact force **9.81 N**, peak **14.90 N**, contact samples 8
-  - Collision count **0**, steps used **260 / 400**, sim time **0.52 s**
+  - `SUCCESS = True`, reason `pushed`, graspState `closed` — the gripper is
+    held shut as a flat blade; this skill never grasps and never attaches
+  - Payload pushed **0.1087 m** horizontally (start x 0.350 → end x 0.4587)
+  - Vertical displacement **-0.0004 m**: the payload stays on the table. Peak
+    height during the stroke was **0.0354 m**, which is exactly the centre of
+    mass of a 50 mm cube on its diagonal — it tumbles, it is not launched.
+  - Contact force **1.10 N** mean, peak **6.10 N**, contact samples **128**
+  - Collision count **0**, steps used **944 / 1670**, sim time **1.888 s**
 - [x] The async **action/result contract** was exercised: a paid action was
   accepted (202) and a correlated result was delivered on the result topic
   (`robot/tunnel/result`), correlated by `actionId`.
@@ -80,13 +86,13 @@ The profile tests cover:
 - canonical `paramsHash`, expiry, payment-policy, and wrong-robot rejection;
 - durable duplicate suppression and idempotency conflict;
 - structured success/error results and settlement eligibility;
-- MuJoCo pick_and_stack completion and abort-on-failure.
+- MuJoCo push_object completion and abort-on-failure.
 
 ```text
 python -m pytest tests/ -q
 # recorded before PR: all tests passed
 
-python -m py_compile bridge/laok_stack_arm_001_zenoh_bridge.py bridge/x402_client.py
+python -m py_compile bridge/laok_push_arm_001_zenoh_bridge.py bridge/x402_client.py
 # recorded before PR: compiled without error
 
 python -c "import zenoh; print(type(zenoh.Config()).__name__)"

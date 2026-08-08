@@ -1,10 +1,10 @@
 {
-  "actionId": "act_laok_fabric_arm_001_example_001",
-  "robotId": "stack-arm-001-demo-001",
-  "skillId": "stack_arm_pick_and_stack",
+  "actionId": "act_laok_push_arm_001_example_001",
+  "robotId": "push-arm-001-demo-001",
+  "skillId": "push_arm_push_object",
   "params": {},
   "paramsHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-  "idempotencyKey": "laok-stack-arm-001-example-001",
+  "idempotencyKey": "laok-push-arm-001-example-001",
   "payment": {
     "provider": "x402",
     "network": "eip155:84532",

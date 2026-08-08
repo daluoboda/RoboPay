@@ -1,4 +1,4 @@
-"""stack-arm-001 --- MuJoCo backend for the RoboPay Tier 1 skill bridge.
+"""push-arm-001 --- MuJoCo backend for the RoboPay Tier 1 skill bridge.
 
 Design contract (deliberately narrow, reviewer-first):
 
@@ -6,22 +6,24 @@ Design contract (deliberately narrow, reviewer-first):
     forces and free-body dynamics of the manipulated object are all solved
     by MuJoCo. Nothing about the object is scripted.
 
-  * The CONTROLLER is deterministic. The arm follows the fixed 5-stage
-    trajectory declared in arm_spec.py (HOME -> MOVE_ABOVE -> DESCEND ->
-    GRIP -> LIFT/SETTLE), built from a keyframe table solved once at import
-    with a closed-form 2-link expression. There is no runtime inverse
-    kinematics, no servo tuning and no iterative solver on the hot path, so
-    a skill run can never fail for numerical reasons -- it only fails for
-    the reasons the bounty cares about.
+  * The CONTROLLER is deterministic. The arm follows the fixed 3-stage push
+    plan declared in arm_spec.py (APPROACH -> PUSH -> VERIFY), built from
+    radii solved once with a closed-form 2-link expression. There is no
+    runtime inverse kinematics, no servo tuning and no iterative solver on
+    the hot path, so a skill run can never fail for numerical reasons -- it
+    only fails for the reasons the bounty cares about.
 
   * The FAILURES are real. `unreachable` drives the arm to full stretch and
     measures the residual tip-to-object distance. `collision` puts a rigid
     obstacle in the path and aborts on a genuine MuJoCo contact. `timeout`
     exhausts a hard step budget mid-trajectory.
 
-  * Grasp closure is contact-gated: the pads must register a measured normal
-    force on the payload before the hold constraint engages. No force, no
-    grasp, no success -- and therefore no settlement upstream.
+  * Success is contact-gated and rest-gated, in that order. The blade must
+    register a measured normal force on the payload for at least
+    PUSH_CONTACT_MIN steps, the payload must never leave the table, and it
+    must be at rest -- by velocity, not by per-step displacement -- before
+    its displacement is read. A payload that is flicked into a ballistic arc
+    fails even if it lands a long way from where it started.
 
 Public surface consumed by flow/executor.py:
     MuJoCoSimulator().push_object(params) -> PickResult(success, reason, metrics)
@@ -34,11 +36,13 @@ import mujoco
 import numpy as np
 
 from arm_spec import (
-    ARM_JOINTS, BASE_H, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
-    FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN, GRASP_WZ,
-    GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
-    OBSTACLE_RADIUS, PAD_HALF, PickResult, SCENES, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, resolve_scene, solve,
+    AIRBORNE_MAX, ARM_JOINTS, BudgetExhausted, CUBE_FRICTION, CUBE_HALF,
+    CUBE_MASS, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRIP_MID, KEYFRAMES,
+    LINK1, LINK2, OBSTACLE_HALF_H, OBSTACLE_RADIUS, PAD_HALF, PUSH_CONTACT_MIN,
+    PUSH_GRIP, PUSH_MIN, PUSH_PEAK_MAX, PUSH_R_END, PUSH_STANDOFF, PUSH_STEPS,
+    PUSH_WZ, PickResult, SCENES, SETTLE_ANG_EPS, SETTLE_LIN_EPS,
+    SETTLE_MAX_STEPS, SETTLE_QUIET_STEPS, STAGE_STEPS, TIMESTEP,
+    UNREACHABLE_GAP, WORK_R, blend, build_metrics, ramp, resolve_scene, solve,
 )
 
 ENGINE = "mujoco"
@@ -68,7 +72,7 @@ def _model_xml(cube_xy, obstacle_xy) -> str:
     </body>"""
 
     return f"""
-<mujoco model="stack-arm-001">
+<mujoco model="push-arm-001">
   <compiler angle="radian" autolimits="true"/>
   <option timestep="{TIMESTEP}" gravity="0 0 -9.81" integrator="implicitfast"/>
   <default>
@@ -180,6 +184,10 @@ class MuJoCoSimulator:
         self._cube_body = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cube")
         self._grip_site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "grip_site")
         self._eq_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "grasp")
+        # Free-body dof block of the payload: [vx vy vz wx wy wz]. Rest
+        # detection reads this directly instead of differencing positions.
+        _cj = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "cube_free")
+        self._cube_dof = int(m.jnt_dofadr[_cj])
 
         self._pose = dict(KEYFRAMES["home"])
         self._grip = FINGER_OPEN
@@ -264,6 +272,12 @@ class MuJoCoSimulator:
     def _cube_pos(self):
         return [float(v) for v in self.data.xpos[self._cube_body]]
 
+    def _cube_speed(self):
+        """(linear m/s, angular rad/s) of the payload free body."""
+        v = self.data.qvel[self._cube_dof:self._cube_dof + 3]
+        w = self.data.qvel[self._cube_dof + 3:self._cube_dof + 6]
+        return float(np.linalg.norm(v)), float(np.linalg.norm(w))
+
     def _tip_pos(self):
         return np.array(self.data.site_xpos[self._grip_site], dtype=float)
 
@@ -274,16 +288,71 @@ class MuJoCoSimulator:
             self.model.eq_active[self._eq_id] = 1
         mujoco.mj_forward(self.model, self.data)
 
+    def _sweep(self, target: dict, n: int, grip: float):
+        """Constant-rate blade stroke, sampling the payload contact as it goes.
+
+        Two things separate this from `_run`:
+          * `ramp` instead of `blend` -- see arm_spec, smoothstep's mid-stroke
+            rate spike is what launches the payload.
+          * Contact force is recorded HERE. The old code only sampled during
+            the post-sweep settle, by which time the blade is no longer
+            touching anything, which is why every push report carried
+            contactForce 0.0 and contactSamples 0 while still claiming success.
+        """
+        start = dict(self._pose)
+        peak_z = self._cube_pos()[2]
+        for i in range(1, n + 1):
+            self._tick(ramp(start, target, i / n), grip)
+            f, pads = self._grasp_force()
+            if pads:
+                self._contact_samples += 1
+                self._hold_forces.append(f)
+                self._peak_force = max(self._peak_force, f)
+            peak_z = max(peak_z, self._cube_pos()[2])
+            if self._collisions:
+                return False, peak_z
+        return True, peak_z
+
+    def _settle_to_rest(self, grip: float):
+        """Hold the arm still until the shoved payload has actually stopped.
+
+        A push leaves the payload moving. Sampling the pose right after the
+        stroke reads it mid-slide, mid-tumble or mid-bounce.
+
+        Rest is gated on VELOCITY, not on per-step displacement. The old
+        displacement gate (0.0005 m per 0.002 s step) is really a 0.25 m/s
+        threshold, and a cube at the apex of a ballistic arc drops below it --
+        which is how a launched payload was certified "at rest" 0.13 m in the
+        air and reported as a lift.
+
+        Returns (settled, steps_waited, peak_z_seen).
+        """
+        quiet = 0
+        peak_z = self._cube_pos()[2]
+        for i in range(1, SETTLE_MAX_STEPS + 1):
+            self._tick(dict(self._pose), grip)
+            peak_z = max(peak_z, self._cube_pos()[2])
+            lin, ang = self._cube_speed()
+            quiet = quiet + 1 if (lin < SETTLE_LIN_EPS and ang < SETTLE_ANG_EPS) else 0
+            if quiet >= SETTLE_QUIET_STEPS:
+                return True, i, peak_z
+        return False, SETTLE_MAX_STEPS, peak_z
+
     # ---------------------------------------------------------------- skill
     def push_object(self, params: dict | None = None) -> PickResult:
-        """Push a cube horizontally across the table.
-        
+        """Shove a payload horizontally across the table.
+
         Controller phases:
-          1. MOVE_ABOVE  — position arm above the cube
-          2. DESCEND     — lower to cube side height
-          3. GRIP        — close fingers to form a flat pushing surface
-          4. PUSH        — extend arm forward to shove the cube  
-          5. VERIFY      — measure horizontal displacement
+          1. APPROACH — drive the closed blade to PUSH_STANDOFF behind the
+             payload, at PUSH_WZ so the pad bottoms clear the table
+          2. PUSH     — constant-rate stroke out to PUSH_R_END, sampling the
+             blade/payload contact force every step
+          3. VERIFY   — wait for the payload to come to rest (velocity gated),
+             then measure the horizontal displacement it actually kept
+
+        Success needs all three: sustained measured contact, the payload at
+        rest ON the table, and at least PUSH_MIN of horizontal travel. A
+        payload that was flicked into the air fails even if it lands far away.
         """
         name, key, scene = resolve_scene(params)
 
@@ -292,7 +361,6 @@ class MuJoCoSimulator:
         self._budget = scene["budget"]
         start_pos = self._cube_pos()
         grasp_state, stage = "closed", "home"
-        PUSH_GRIP = FINGER_CLOSED  # form pusher surface
 
         def report(success, reason, note=""):
             hold = (sum(self._hold_forces) / len(self._hold_forces)
@@ -321,37 +389,69 @@ class MuJoCoSimulator:
                     return report(False, "unreachable",
                                   f"tip stopped {gap:.3f} m short of the object")
 
-            # Push: from behind cube (r=0.25) through to past cube (r=0.40)
-            r_start = max(0.15, planar - 0.10)  # behind cube
-            r_end = 0.40                        # past cube (max reachable at GRASP_WZ)
-            push_start = solve(r_start, GRASP_WZ)
-            push_through = solve(r_end, GRASP_WZ)
+            # Blade path, derived from the scene rather than hand-typed: start
+            # PUSH_STANDOFF behind the payload's near face and stroke out to the
+            # far edge of the envelope. Both radii are solved at PUSH_WZ, where
+            # the pad bottoms clear the table instead of ploughing through it.
+            r_start = max(0.15, planar - CUBE_HALF - PUSH_STANDOFF)
+            push_start = solve(r_start, PUSH_WZ)
+            push_end = solve(PUSH_R_END, PUSH_WZ)
+            if push_start is None or push_end is None:    # pragma: no cover
+                return report(False, "unreachable",
+                              f"push path r={r_start:.3f}->{PUSH_R_END:.3f} "
+                              f"is not solvable at wrist z={PUSH_WZ:.3f}")
 
-            # -- stage 1/3 APPROACH behind cube
+            # -- stage 1/3 APPROACH: park the blade behind the payload
             stage = "approach"
             if not self._run(push_start, STAGE_STEPS["move_above"], PUSH_GRIP):
                 return report(False, "collision", "obstacle struck during approach")
 
-            # -- stage 2/3 PUSH through cube (arm extends, shoves cube forward)
+            # -- stage 2/3 PUSH: constant-rate stroke, contact sampled per step
             stage = "push"
-            if not self._run(push_through, STAGE_STEPS["lift"], PUSH_GRIP):
+            swept, sweep_peak_z = self._sweep(push_end, PUSH_STEPS, PUSH_GRIP)
+            if not swept:
                 return report(False, "collision", "obstacle struck during push")
 
-            # -- stage 3/3 VERIFY
+            # -- stage 3/3 VERIFY: never measure a payload that is still moving
             stage = "verify"
-            self._hold(STAGE_STEPS["settle"], PUSH_GRIP, sample=True)
+            settled, waited, settle_peak_z = self._settle_to_rest(PUSH_GRIP)
+            peak_z = max(sweep_peak_z, settle_peak_z)
 
         except BudgetExhausted:
             return report(False, "timeout",
                           f"step budget {self._budget} exhausted in stage {stage}")
 
-        # Measure horizontal displacement (ignore Z)
+        if not settled:
+            return report(False, "unsettled",
+                          f"payload still moving after {waited} settle steps")
+
         end_pos = self._cube_pos()
-        disp = np.hypot(end_pos[0] - start_pos[0], end_pos[1] - start_pos[1])
-        if disp < 0.025:  # minimum 3 cm horizontal displacement
+        disp = float(np.hypot(end_pos[0] - start_pos[0], end_pos[1] - start_pos[1]))
+
+        # Three independent gates, each closing a way the old code faked a pass.
+        if self._contact_samples < PUSH_CONTACT_MIN:
             return report(False, "push_failed",
-                          f"cube moved only {disp:.3f} m horizontally")
-        return report(True, "pushed", f"cube pushed {disp:.3f} m horizontally")
+                          f"blade loaded the payload on only "
+                          f"{self._contact_samples} steps (need "
+                          f"{PUSH_CONTACT_MIN}) -- no sustained contact")
+        if peak_z > PUSH_PEAK_MAX:
+            return report(False, "push_failed",
+                          f"payload was launched to z={peak_z:.4f} m "
+                          f"(tumble apex is {PUSH_PEAK_MAX:.4f} m) -- struck, "
+                          f"not pushed")
+        if end_pos[2] > AIRBORNE_MAX:
+            return report(False, "push_failed",
+                          f"payload came to rest off the table at "
+                          f"z={end_pos[2]:.3f} m")
+        if disp < PUSH_MIN:
+            return report(False, "push_failed",
+                          f"payload moved only {disp:.3f} m horizontally")
+        return report(True, "pushed",
+                      f"payload pushed {disp:.3f} m horizontally over "
+                      f"{self._contact_samples} contact steps "
+                      f"(peak {self._peak_force:.2f} N), stayed on the table "
+                      f"(peak z {peak_z:.4f} m) and came to rest at "
+                      f"z={end_pos[2]:.3f} m after {waited} settle steps")
 
 
 __all__ = ["MuJoCoSimulator", "PickResult", "KEYFRAMES", "SCENES", "ENGINE"]

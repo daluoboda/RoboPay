@@ -1,5 +1,5 @@
 {
-  "robotId": "stack-arm-001-demo-001",
+  "robotId": "push-arm-001-demo-001",
   "payee": "${ROBOT_PAYEE_ADDRESS}",
   "transport": "zenoh",
   "actionTopic": "robot/tunnel/action",

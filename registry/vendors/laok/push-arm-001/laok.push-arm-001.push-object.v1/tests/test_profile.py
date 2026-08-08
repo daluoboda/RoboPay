@@ -1,11 +1,11 @@
-"""Structural and privacy validation for the laok stack-arm-001 profile."""
+"""Structural and privacy validation for the laok push-arm-001 profile."""
 import os
 
 import yaml
 
 PROFILE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-PROFILE_ID = "laok.stack-arm-001.pick-and-stack.v1"
+PROFILE_ID = "laok.push-arm-001.push-object.v1"
 
 
 def _load(name):
@@ -22,7 +22,7 @@ def test_profile_id_consistent():
 def test_robot_profile_fields():
     rp = _load("robot.profile.yaml")
     assert rp["vendor"] == "laok"
-    assert rp["robotModel"] == "stack-arm-001"
+    assert rp["robotModel"] == "push-arm-001"
     assert rp["submission"]["tier"] == 1
     assert rp["submission"]["scope"] == "simulated"
     assert rp["runtime"]["transport"] == "zenoh"
@@ -55,7 +55,7 @@ def test_no_secrets_in_profiles():
 
 def test_action_envelope_example():
     import json
-    env = json.load(open(os.path.join(PROFILE, "examples", "action-envelope.pick-place.json")))
+    env = json.load(open(os.path.join(PROFILE, "examples", "action-envelope.push-object.json")))
     assert env["skillId"] == "push_arm_push_object"
     assert env["payment"]["network"] == "eip155:84532"
     assert env["payment"]["amount"] == "100000"

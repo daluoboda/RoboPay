@@ -10,16 +10,16 @@ verified **x402 USDC payment on Base Sepolia**, with the result returned
 ```
 laok.push-arm-001.push-object.v1/
 ├── robot.profile.yaml          # identity, runtime, submission scope/tier
-├── skills.yaml                 # published skill: stack_arm_pick_and_stack
+├── skills.yaml                 # published skill: push_arm_push_object
 ├── execution-mapping.yaml      # envelope schema, replay protection
 ├── functions.yaml              # agent function surface (skills/actions/status)
 ├── payment-policy.yaml         # x402 policy: eip155:84532, USDC, 0.10
 ├── examples/
 │   └── action-envelope.push-object.json
 ├── bridge/
-│   ├── laok_stack_arm_001_zenoh_bridge.py   # HTTP + Zenoh bridge
+│   ├── laok_push_arm_001_zenoh_bridge.py   # HTTP + Zenoh bridge
 │   ├── x402_client.py                    # payment gate + facilitator verify/settle
-│   ├── simulator.py                      # MuJoCo pick_and_stack
+│   ├── simulator.py                      # MuJoCo push_object
 │   ├── arm_spec.py
 │   ├── requirements.txt
 │   ├── config.example.json
@@ -53,17 +53,27 @@ cd ../tests && python -m pytest -q
 cd ../bridge && python gen_bridge_evidence.py
 
 # 3) (optional) run the HTTP + Zenoh bridge
-python laok_stack_arm_001_zenoh_bridge.py --port 8080
+python laok_push_arm_001_zenoh_bridge.py --port 8080
 ```
 
 ## What is proven
 
 - **Real on-chain settlement.** A live x402 payment was verified and settled on
   Base Sepolia through the public facilitator. Tx
-  `0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2`,
-  on-chain status `1`, payer balance `19.8 → 19.7 USDC`.
-- **Real physics execution.** MuJoCo `pick_and_stack` lifted the object `0.1313 m`
-  with zero collisions.
+  `0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba`
+  (block `45125835`), on-chain status `1`, payer balance `18.9 → 18.8 USDC`.
+  A second paid action settled as
+  `0x3d9cbff38cc74a836effaae040244b9c06b07b90dac774c8223cc480e296483e`
+  (block `45125837`), taking the payer to `18.7 USDC`. Both hashes are listed in
+  `x402-evidence.json` and re-checked against the chain by
+  `verify_settlement.py` in CI.
+- **Real physics execution.** MuJoCo `push_object` shoved the payload
+  `0.1087 m` horizontally (x `0.350 → 0.459 m`) over `128` steps of measured
+  blade contact, peak normal force `6.10 N`, zero collisions. Vertical
+  displacement is `-0.0004 m`: the payload never leaves the table, which is
+  the whole point of a push. Peak height during the stroke is `0.0354 m`,
+  exactly the centre of mass of a 50 mm cube standing on its diagonal — it
+  tumbles across the table, it is not launched.
 - **Async contract.** Unpaid → 402; paid → 202 accepted; correlated success
   result on the result topic; duplicate / replay / expired requests are
   rejected before any actuation; failure never settles.

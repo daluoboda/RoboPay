@@ -40,18 +40,22 @@ mappings:
     requestParametersAllowed: false
     completion:
       runningEvidence:
-        - stage equals descend
-        - graspState equals attaching
+        - stage equals approach
+        - stage equals push
+        - graspState equals closed
       successEvidence:
-        - objectLifted greater than 0.05
-        - graspState equals attached
+        - objectPushed greater than 0.030
+        - contactSamples greater than 19
+        - objectLifted less than 0.035
         - collisionCount equals 0
+        - graspState equals closed
     failure:
       modes:
         - unreachable
         - collision
         - timeout
-        - grasp_failed
+        - unsettled
+        - push_failed
       action: Abort
       retryRunScript: false
 
