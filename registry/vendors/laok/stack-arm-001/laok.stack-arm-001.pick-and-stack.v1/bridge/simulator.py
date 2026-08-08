@@ -120,7 +120,6 @@ def _model_xml(cube_a_xy, cube_b_xy, obstacle_xy) -> str:
 
     <!-- cube B: stacking base (static on table) -->
     <body name="cube_b" pos="{bx} {by} {CUBE_HALF}">
-      <freejoint name="cube_b_free"/>
       <geom name="cube_b_g" type="box" size="{CUBE_HALF} {CUBE_HALF} {CUBE_HALF}"
             mass="{CUBE_MASS}" rgba="0.70 0.40 0.20 1"
             contype="2" conaffinity="11" friction="{CUBE_FRICTION} 0.05 0.001"
