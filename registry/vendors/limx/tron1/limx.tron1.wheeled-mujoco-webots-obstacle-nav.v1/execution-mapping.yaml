@@ -7,23 +7,43 @@ model:
   mjcf: vendor/limxdynamics/robot-description/WF_TRON1A/xml/robot.xml
   urdfSha256: e5aa9ee49e4e39c201da225e1f734318331c70383ab941da17d80ae59f90e46e
   mujoco: Loads the pinned vendor MJCF and pinned vendor ONNX policy directly.
-  webots: Converts the same pinned vendor URDF and STL meshes to Webots R2025a.
+  webots: >-
+    Converts the same pinned vendor URDF and STL meshes to Webots R2025a and
+    repairs converter collision-frame loss from pinned vendor geometry.
 transport:
   type: zenoh
   actionTopic: robot/tunnel/action
   resultTopic: robot/tunnel/result
   metricsTopic: robot/limx_tron1/metrics
 paramsHashFormat: "sha256:<hex>"
+validation:
+  mujoco:
+    level: actuator-level
+    controller: pinned LimX Isaac Gym ONNX policy mapped to joint torques
+  webots:
+    level: task-level
+    controller: online planner mapped to bounded Supervisor chassis velocity
+    rootPoseWrites: 0
+    trajectoryReplay: false
+    builtInDemoMotion: false
+  sharedContract:
+    - official WF_TRON1A model identity
+    - online route planner
+    - ten waypoints and three physical obstacles
+    - measured goal, clearance and collision metrics
 mappings:
   navigate_obstacle_course:
     task: fixed_three_obstacle_navigation
     policy: >-
       A shared state-driven route planner selects velocity commands from the
-      measured base pose. Both simulators map them through LimX's pinned official
-      ONNX policy into joint torques; no root-pose write, qpos teleport or
-      prerecorded trajectory is used.
+      measured base pose. MuJoCo maps them through LimX's pinned official ONNX
+      policy into joint torques. Webots maps the same online planner output to
+      bounded chassis linear/angular velocity on the dynamic vendor model and
+      measures the resulting simulator state. It performs no translation or
+      rotation field writes and contains no prerecorded trajectory. This is a
+      task-level comparison; only MuJoCo claims actuator-level ONNX execution.
     inputs: []
-    metrics: [waypoints_completed, detected_obstacles, minimum_clearance_m, collision, goal_distance_m, final_base_pose]
+    metrics: [waypoints_completed, detected_obstacles, minimum_clearance_m, collision, goal_distance_m, final_base_pose, max_measured_speed_mps]
     limits:
       maxDurationSec: 70
       maxLinearVelocityMps: 0.65

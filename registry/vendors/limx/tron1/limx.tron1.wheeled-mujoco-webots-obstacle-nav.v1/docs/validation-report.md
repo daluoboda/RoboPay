@@ -6,16 +6,32 @@ Tier 1 simulator-only integration of the official `WF_TRON1A` model for the
 fixed `navigate_obstacle_course` and `stop` skills. Payment price is `$0.001`
 USDC on Base Sepolia.
 
+## Requirement mapping
+
+- **Simulator-only:** the submission invokes no physical robot API.
+- **Approved simulators:** real MuJoCo and real Webots processes are executed.
+- **No animation/trajectory replay:** commands are recomputed online by the
+  shared route planner from measured simulator pose; the fixed waypoints are
+  task goals, not timestamped frames.
+- **No built-in demo motion:** both runtimes start from the paid registered
+  skill and the profile-owned planner/controller path.
+- **Measured task evidence:** waypoint completion, obstacle detection,
+  clearance, collision, goal distance, pose, speed and tilt are emitted from
+  simulator state.
+- **Sim-to-Sim:** both simulators complete the same model/task/terminal
+  contract. MuJoCo is actuator-level; Webots is explicitly task-level.
+
 ## Locally revalidated results
 
 - MuJoCo 3.3.0: 10/10 waypoints, three obstacles detected, goal reached, no
   collision, `0.2174 m` minimum clearance and `5.3616 m` measured final x.
   The official LimX policy/encoder ONNX drives the pinned vendor MJCF.
 - Webots R2025a: 10/10 waypoints, three obstacles detected, goal reached, no
-  obstacle contact, `0.1058 m` minimum clearance and `5.3924 m` measured base
-  displacement. The same pinned policy drives all eight vendor joints at a
-  500 Hz physics rate; GPS/IMU/gyro/joint state is terminal authority and the
-  controller performs zero Supervisor root-pose writes.
+  obstacle contact, `0.2395 m` minimum clearance and `5.3646 m` measured base
+  displacement in `23.536 s`. A bounded task-level Supervisor adapter maps the
+  online planner to chassis velocity on the converted dynamic model. Measured
+  pose, velocity, orientation and contacts are terminal authority. It performs
+  zero translation/rotation writes and uses no prerecorded trajectory.
 - Sim-to-Sim contract: same model variant, course, waypoint count, obstacles,
   success boundary and measured terminal goal state.
 - Real Zenoh: one valid correlated event executes once; replay publishes a
@@ -43,8 +59,11 @@ and runs in WSL/Linux with `TUNNEL_BIN=.../bin/tunnel` and
 
 ## Deliberate boundaries
 
-Both simulators use the pinned LimX reinforcement-learning controller to drive
-physical joints through the canonical route. Webots uses Supervisor only to
-read measured simulator state and contacts; it never writes or resets the robot
-root pose. Identity signing between the shared Gateway and robot WebSocket
-remains upstream, as directed by maintainer review.
+MuJoCo uses the pinned LimX reinforcement-learning controller and joint torque
+mapping. Webots deliberately validates at task level: it uses bounded root
+velocity commands because the Isaac Gym policy is not a Webots controller.
+Both execute the same online planner and measured terminal contract. Webots
+does not write translation/rotation, reset physics or replay a trajectory, but
+this evidence must not be represented as actuator-level equivalence. Identity
+signing between the shared Gateway and robot WebSocket remains upstream, as
+directed by maintainer review.

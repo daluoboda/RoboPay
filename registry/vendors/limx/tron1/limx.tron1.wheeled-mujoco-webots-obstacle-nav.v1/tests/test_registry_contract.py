@@ -25,14 +25,32 @@ def test_registry_and_payment_policy_do_not_drift() -> None:
     skill_ids = {entry["skillId"] for entry in skills["skills"]}
     assert profile["profileId"] == PROFILE_ID
     assert profile["robotId"] == ROBOT_ID
+    assert skills["profileId"] == PROFILE_ID
+    assert policy["profileId"] == PROFILE_ID
+    assert mapping["profileId"] == PROFILE_ID
+    assert policy["network"] == "eip155:84532"
     assert {NAVIGATION_SKILL, STOP_SKILL} == skill_ids
     assert {entry["skill_id"] for entry in catalog} == skill_ids
     assert {entry["skillId"] for entry in policy["policies"]} == skill_ids
     assert set(mapping["mappings"]) == skill_ids
     assert {entry["priceUSDC"] for entry in policy["policies"]} == {"0.001"}
     assert {entry["price_usdc"] for entry in catalog} == {"0.001"}
-    source = ROOT / profile["modelIdentity"]["urdf"]
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == profile["modelIdentity"]["urdfSha256"]
+    identities = profile["modelIdentity"] | {
+        "policy": profile["controlIdentity"]["policy"],
+        "policySha256": profile["controlIdentity"]["policySha256"],
+    }
+    for path_key, hash_key in (
+        ("urdf", "urdfSha256"),
+        ("mjcf", "mjcfSha256"),
+        ("policy", "policySha256"),
+    ):
+        source = ROOT / identities[path_key]
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == identities[hash_key]
+
+    assert mapping["model"]["urdf"] == profile["modelIdentity"]["urdf"]
+    assert mapping["model"]["mjcf"] == profile["modelIdentity"]["mjcf"]
+    assert mapping["model"]["urdfSha256"] == profile["modelIdentity"]["urdfSha256"]
+    assert mapping["model"]["commit"] == profile["modelIdentity"]["sourceCommit"]
 
 
 def test_profile_docs_and_public_action_examples_are_present() -> None:
@@ -59,7 +77,7 @@ def test_profile_docs_and_public_action_examples_are_present() -> None:
         assert example["params"] == {}
 
 
-def test_webots_controller_is_actuator_driven_and_cannot_write_robot_root() -> None:
+def test_webots_controller_is_task_driven_without_pose_writes_or_replay() -> None:
     controller = (
         ROOT
         / "simulators/webots/controllers/limx_tron1_obstacle_controller/limx_tron1_obstacle_controller.py"
@@ -68,8 +86,12 @@ def test_webots_controller_is_actuator_driven_and_cannot_write_robot_root() -> N
         encoding="utf-8"
     )
 
-    assert "LimXOnnxPolicy" in controller
-    assert ".setTorque(" in controller
+    assert "RoutePlanner" in controller
+    assert "self_node.setVelocity(command)" in controller
+    assert '"supervisor_root_pose_writes": 0' in controller
+    assert '"trajectory_replay": False' in controller
+    assert '"waypoints_completed"' in controller
+    assert '"collision"' in controller
     assert "basicTimeStep 2" in world
     for forbidden_root_write in (
         "setSFVec3f",
@@ -78,3 +100,23 @@ def test_webots_controller_is_actuator_driven_and_cannot_write_robot_root() -> N
         "simulationReset",
     ):
         assert forbidden_root_write not in controller
+
+
+def test_sim2sim_validation_level_is_documented_without_drift() -> None:
+    mapping = _yaml("execution-mapping.yaml")
+    evidence = _yaml("docs/evidence/evidence-manifest.yaml")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    report = (ROOT / "docs/validation-report.md").read_text(encoding="utf-8")
+
+    validation = mapping["validation"]
+    assert validation["mujoco"]["level"] == "actuator-level"
+    assert validation["webots"]["level"] == "task-level"
+    assert validation["webots"]["rootPoseWrites"] == 0
+    assert validation["webots"]["trajectoryReplay"] is False
+    assert validation["webots"]["builtInDemoMotion"] is False
+
+    levels = {entry.get("validationLevel") for entry in evidence["evidence"]}
+    assert {"actuator-level", "task-level-sim-to-sim"} <= levels
+    for document in (readme, report):
+        assert "task-level" in document
+        assert "actuator-level" in document

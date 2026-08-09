@@ -111,6 +111,9 @@ class LimXOnnxPolicy:
             q_desired = 0.25 * actions[index]
             torques[index] = 42.0 * (q_desired - q[index]) - 2.5 * dq[index]
         for index in (3, 7):
-            velocity_desired = 0.8 * actions[index]
+            # The pinned Isaac Gym policy was trained with action_scale_vel=0.5.
+            # The 0.8 value in the hardware deploy config is the wheel damping
+            # gain, not the policy's velocity-action scale.
+            velocity_desired = 0.5 * actions[index]
             torques[index] = 0.8 * (velocity_desired - dq[index])
         return np.clip(torques, [-80, -80, -80, -40, -80, -80, -80, -40], [80, 80, 80, 40, 80, 80, 80, 40])

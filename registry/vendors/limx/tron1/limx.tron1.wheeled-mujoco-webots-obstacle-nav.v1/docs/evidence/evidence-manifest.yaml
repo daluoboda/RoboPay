@@ -3,10 +3,19 @@ profileId: limx.tron1.wheeled-mujoco-webots-obstacle-nav.v1
 evidence:
   - artifact: artifacts/mujoco_result.json
     generatedBy: bridge/run_mujoco_obstacle_course.py
-    proves: official-model measured MuJoCo navigation and terminal state
+    validationLevel: actuator-level
+    proves: pinned official ONNX policy, joint-torque execution, measured MuJoCo navigation and terminal state
   - artifact: artifacts/sim2sim_result.json
     generatedBy: bridge/run_sim2sim_validation.py
-    proves: real MuJoCo and real Webots complete the same bounded task
+    validationLevel: task-level-sim-to-sim
+    proves: >-
+      real MuJoCo and real Webots complete the same online-planned bounded task
+      with the official WF_TRON1A model identity, ten waypoints, three physical
+      obstacles, measured clearance, collision and terminal goal metrics
+    webotsBoundary: >-
+      bounded Supervisor chassis velocity; zero translation/rotation writes;
+      no built-in demo motion; no animation or trajectory replay; not claimed
+      as ONNX or actuator-level equivalence
   - artifact: artifacts/base_sepolia_result_<timestamp>.json
     generatedBy: bridge/run_live_base_sepolia_e2e.py --ci
     proves: unpaid 402, first paid action, terminal simulator success and Base Sepolia settlement transaction
@@ -15,5 +24,5 @@ evidence:
     proves: isValid false blocks before publication; failure/timeout/replay have zero settlement or repeat dispatch
   - artifact: operator visual recording
     generatedBy: run-live-base-sepolia-visual.ps1
-    proves: visible real Tunnel, x402 payment, MuJoCo motion, terminal result and settlement
+    proves: visible real Tunnel, x402 payment, actuator-level MuJoCo motion, terminal result and settlement
     status: pending-operator-recording

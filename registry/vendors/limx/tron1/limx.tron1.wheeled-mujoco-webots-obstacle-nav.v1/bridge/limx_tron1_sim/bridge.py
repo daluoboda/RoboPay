@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 from .contracts import PROFILE_ID, ROBOT_ID, ContractError, NavigationRequest, validate_action
 from .runtime import run_mujoco_episode
+from .webots import run_webots_episode
 
 
 ACTION_TOPIC = "robot/tunnel/action"
@@ -31,6 +32,9 @@ DEFAULT_REPLAY_DB = PROFILE_ROOT / "artifacts" / "state" / "limx_tron1_replay.sq
 
 
 def production_episode_runner(request: NavigationRequest) -> dict[str, Any]:
+    webots_visual = os.environ.get("LIMX_TRON1_WEBOTS_VIEWER", "").strip().lower() in {"1", "true", "yes"}
+    if webots_visual:
+        return run_webots_episode(request, viewer=True)
     visual = os.environ.get("LIMX_TRON1_MUJOCO_VIEWER", "").strip().lower() in {"1", "true", "yes"}
     hold_seconds = float(os.environ.get("LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS", "180")) if visual else 0.0
     return run_mujoco_episode(request, viewer=visual, viewer_hold_seconds=max(0.0, hold_seconds))

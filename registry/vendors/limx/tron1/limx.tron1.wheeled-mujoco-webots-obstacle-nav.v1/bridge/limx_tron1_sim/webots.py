@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,25 @@ def run_webots_episode(
     else:
         command.extend(["--batch", "--mode=fast", "--no-rendering", "--stdout", "--stderr"])
     command.append(str(scene))
+    if viewer:
+        process = subprocess.Popen(command, env=environment)
+        deadline = time.monotonic() + request.max_duration_sec + 45.0
+        while time.monotonic() < deadline and not RESULT_PATH.is_file():
+            return_code = process.poll()
+            if return_code is not None:
+                raise RuntimeError(
+                    "Webots viewer exited before producing its measured TRON 1 result JSON. "
+                    f"returncode={return_code}"
+                )
+            time.sleep(0.1)
+        if not RESULT_PATH.is_file():
+            process.terminate()
+            raise RuntimeError("Webots viewer timed out before producing its terminal result JSON")
+        result = json.loads(RESULT_PATH.read_text(encoding="utf-8"))
+        result["webots_return_code"] = None
+        result["webots_viewer_pid"] = process.pid
+        return result
+
     completed = subprocess.run(command, env=environment, capture_output=True, text=True, check=False)
     if not RESULT_PATH.is_file():
         raise RuntimeError(

@@ -8,6 +8,17 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 
 WorldInfo {
   basicTimeStep 2
+  contactProperties [
+    ContactProperties {
+      material1 "default"
+      material2 "tron1 wheel"
+      coulombFriction [ 0.6 ]
+      bounce 0
+      bounceVelocity 0.001
+      softERP 0.8
+      softCFM 0.000001
+    }
+  ]
 }
 Viewpoint {
   orientation -0.35 0.10 0.93 2.42

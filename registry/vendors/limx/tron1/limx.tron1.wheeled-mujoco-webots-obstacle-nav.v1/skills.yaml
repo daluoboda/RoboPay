@@ -4,8 +4,10 @@ skills:
   - skillId: navigate_obstacle_course
     description: >-
       Navigate the fixed three-obstacle course from measured simulator state.
-      MuJoCo and Webots use LimX's pinned WF_TRON1A ONNX locomotion policy,
-      the same canonical route and official model geometry.
+      MuJoCo uses LimX's pinned WF_TRON1A ONNX locomotion policy. Webots uses a
+      bounded task-level chassis-velocity adapter on the converted official
+      model; both run the same online planner, route and terminal contract.
+      Neither simulator uses a built-in demo motion or trajectory replay.
     params: {}
     paymentRequired: true
     priceUSDC: "0.001"

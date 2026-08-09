@@ -14,14 +14,22 @@ meshes; it does not use a substitute robot.
 ## What the action does
 
 `navigate_obstacle_course` follows ten state-driven waypoints through a
-three-obstacle slalom corridor
-physical obstacles and terminates only from measured simulator state. MuJoCo
+three-obstacle slalom corridor and terminates only from measured simulator
+state. MuJoCo
 uses the vendor policy to turn current base/joint observations and velocity
-commands into torques. Webots evaluates the same pinned vendor ONNX policy at
-50 Hz, applies its torques to all eight joints at a 500 Hz physics rate, and
-reads GPS, IMU, gyro and joint sensors from the converted vendor model. Success means
-all waypoints and the goal were reached, all obstacles were detected and no
-obstacle contact occurred. `stop` is a separate zero-velocity terminal path.
+commands into torques. Webots runs the same online route against the converted
+vendor model at a 500 Hz physics rate using a bounded task-level Supervisor
+velocity adapter. The adapter writes neither translation nor rotation, contains
+no recorded trajectory and leaves the wheel joints passive against the physical
+floor. It reads measured pose, velocity, orientation and contacts from Webots.
+Success means all waypoints and the goal were reached, all obstacles were
+detected and no obstacle contact occurred. `stop` is a separate zero-velocity
+terminal path.
+
+This is task-level Sim-to-Sim validation, not a claim that Webots executes the
+Isaac Gym ONNX policy or reproduces MuJoCo actuator dynamics. MuJoCo is the
+actuator-level policy proof; Webots independently proves the same planner,
+course and measured terminal contract in a second real simulator.
 
 No caller-controlled motion parameters are accepted.
 
@@ -107,6 +115,22 @@ Runtime-only configuration:
 
 Never commit, print or record a private key. Use an untracked process
 environment locally and GitHub Actions secrets in CI.
+
+For an OBS recording, provide the test-only values in the current PowerShell
+process and run:
+
+```powershell
+$env:ROBOT_PAYEE_ADDRESS = '<testnet payee>'
+$env:BASE_SEPOLIA_PRIVATE_KEY = '<testnet payer key>'
+$env:TUNNEL_BIN = '<absolute path to the hardened Tunnel binary>'
+./run-live-base-sepolia-visual.ps1 -OpenBaseScan
+```
+
+The launcher starts the real bridge, Zenoh and WSL Tunnel, shows the unpaid
+`402`, sends the first paid request, opens the actuator-level MuJoCo run, waits for
+the correlated result and settlement, then opens the Base Sepolia transaction.
+The MuJoCo viewer remains visible throughout the paid action and closes at its terminal state,
+so the simulator and settlement can appear in the same recording.
 
 ## CI and evidence
 

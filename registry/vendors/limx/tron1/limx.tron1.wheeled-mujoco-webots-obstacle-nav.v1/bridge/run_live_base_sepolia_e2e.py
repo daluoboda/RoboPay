@@ -3,7 +3,7 @@
 This operator-only command uses a funded testnet payer supplied at run time.
 It never writes the private key, payee address, or generated receipt into a
 tracked file.  The Tunnel, x402 client/facilitator, Zenoh transport, and TRON 1
-MuJoCo episode are real implementations; the local proxy merely exposes the
+MuJoCo episode is a real implementation; the local proxy merely exposes the
 Tunnel's WebSocket HTTP boundary for an OBS-friendly localhost URL.
 """
 
@@ -13,7 +13,6 @@ import argparse
 import base64
 import json
 import os
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -193,10 +192,21 @@ def _start_wsl_tunnel(
     variables["ZENOH_CONFIG"] = _wsl_path(zenoh_config)
     variables["IDEMPOTENCY_STORE_PATH"] = _wsl_path(idempotency_path)
     variables["LD_LIBRARY_PATH"] = _wsl_path(binary.resolve().parents[1] / ".zenoh-c" / "lib")
-    environment = " ".join(f"{key}={shlex.quote(value)}" for key, value in sorted(variables.items()))
-    command = f"exec env {environment} {shlex.quote(_wsl_path(binary))} --config {shlex.quote(_wsl_path(config))}"
+    # Pass every value as an argv element. Going through ``bash -lc`` here
+    # corrupts x402 prices such as ``$0.001`` because Bash expands ``$0``.
+    environment = [f"{key}={value}" for key, value in sorted(variables.items())]
     return subprocess.Popen(
-        ["wsl.exe", "-d", "Ubuntu-22.04", "--", "bash", "-lc", command],
+        [
+            "wsl.exe",
+            "-d",
+            "Ubuntu-22.04",
+            "--exec",
+            "env",
+            *environment,
+            _wsl_path(binary),
+            "--config",
+            _wsl_path(config),
+        ],
         cwd=PROFILE_ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -283,8 +293,11 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "PYTHONPATH": str(PROFILE_ROOT / "bridge"),
                 "ZENOH_CONFIG": str(zenoh_config),
+                "LIMX_TRON1_WEBOTS_VIEWER": "false",
                 "LIMX_TRON1_MUJOCO_VIEWER": "true" if args.visual else "false",
-                "LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS": "300",
+                # The result must return before the Tunnel's execution timeout;
+                # the viewer therefore closes at terminal simulator state.
+                "LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS": "0",
             }
         )
         bridge = subprocess.Popen(
