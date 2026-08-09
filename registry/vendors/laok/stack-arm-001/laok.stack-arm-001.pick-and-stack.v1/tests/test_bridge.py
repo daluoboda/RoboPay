@@ -66,12 +66,14 @@ def test_params_hash_mismatch(bridge):
     code, resp = bridge.request_action(env)
     assert code == 400
     assert resp["errorCode"] == "PARAMS_HASH_MISMATCH"
+    assert "act2" not in bridge.actions  # zero action published -> zero actuation / zero settlement
 
 
 def test_expired(bridge):
     code, resp = bridge.request_action(paid("act3", "k3", "auth3", expired=True))
     assert code == 402
     assert resp["errorCode"] == "PAYMENT_EXPIRED"
+    assert "act3" not in bridge.actions  # zero action published -> zero actuation / zero settlement
 
 
 def test_duplicate_no_rerun(bridge):
@@ -87,6 +89,7 @@ def test_idempotency_conflict(bridge):
     code, resp = bridge.request_action(paid("act5b", "k5", "auth5"))
     assert code == 409
     assert resp["errorCode"] == "IDEMPOTENCY_CONFLICT"
+    assert "act5b" not in bridge.actions  # conflicted action never published -> no second settlement
 
 
 def test_auth_replay(bridge):
@@ -94,6 +97,19 @@ def test_auth_replay(bridge):
     code, resp = bridge.request_action(paid("act7", "k7", "auth6"))
     assert code == 409
     assert resp["errorCode"] == "PAYMENT_AUTHORIZATION_REPLAY"
+    assert "act7" not in bridge.actions  # replayed action never published -> no second settlement
+
+def test_payment_gate_no_action_published(bridge):
+    """Invalid payment leaves no action in the store -> zero publish, zero actuation, zero settlement.
+
+    Mirrors the merged Tier-1 profiles' payment-gate contract: an HTTP 402 must
+    never publish a Zenoh action, never actuate the robot, and never settle.
+    """
+    code, resp = bridge.request_action(paid("gate1", "kg1", "auth-gate1", expired=True))
+    assert code == 402
+    assert resp["errorCode"] == "PAYMENT_EXPIRED"
+    assert "gate1" not in bridge.actions
+
 
 def test_txhash_format_validation():
     import re
