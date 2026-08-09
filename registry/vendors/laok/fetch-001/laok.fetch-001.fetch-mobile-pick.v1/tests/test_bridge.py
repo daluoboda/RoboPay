@@ -16,8 +16,9 @@ PAYEE = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
 ROBOT = "fetch-001-demo-001"
 
 
-def paid(action_id, idem, auth, verified=True, expired=False, amount="100000"):
-    params = {}
+def paid(action_id, idem, auth, verified=True, expired=False, amount="100000", params=None):
+    if params is None:
+        params = {}
     pay = {
         "provider": "x402", "network": "eip155:84532",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
@@ -165,6 +166,21 @@ class TestRealMuJoCoCorrelated(unittest.TestCase):
         self.assertTrue(r["settlementEligible"], "real sim success must settle")
         self.assertEqual(r["metrics"].get("engine"), "mujoco")
 
+
+
+    def test_real_fetch_fails(self):
+        res = MuJoCoSimulator().fetch_mobile_pick({'cube_a': [2.0, 0.0]})
+        self.assertFalse(res.success, msg="expected physical failure, got " + str(getattr(res, 'reason', '')))
+        self.assertEqual(res.metrics.get("engine"), "mujoco")
+
+    def test_relay_real_fetch_failure_no_settle(self):
+        b = Bridge(ROBOT, PAYEE, ":memory:")
+        code, _ = b.request_action(
+            paid("fail-fetch", "kfail-fetch", "authfail-fetch", params={'cube_a': [2.0, 0.0]}))
+        self.assertEqual(code, 202)
+        r = b.actions["fail-fetch"]
+        self.assertNotEqual(r["status"], "success", "physical failure must not read success")
+        self.assertFalse(r["settlementEligible"], "failure must never settle")
 
 if __name__ == "__main__":
     unittest.main()
