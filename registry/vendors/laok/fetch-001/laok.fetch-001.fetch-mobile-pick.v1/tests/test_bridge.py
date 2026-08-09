@@ -129,3 +129,42 @@ def test_pi_payment_accepted(bridge):
     r = bridge.actions["pi1"]
     assert r["status"] == "success"
     assert r["settlementEligible"] is True
+
+
+
+import unittest
+
+try:
+    import mujoco  # noqa: F401
+    HAVE_MUJOCO = True
+except Exception:
+    HAVE_MUJOCO = False
+
+from simulator import MuJoCoSimulator  # noqa: E402
+
+
+@unittest.skipUnless(HAVE_MUJOCO, "mujoco not installed")
+class TestRealMuJoCoCorrelated(unittest.TestCase):
+    """The bridge settles ONLY when the REAL physics backend succeeds."""
+
+    def test_real_fetch_succeeds(self):
+        res = MuJoCoSimulator().fetch_mobile_pick({})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.reason}")
+        self.assertEqual(res.metrics.get("engine"), "mujoco")
+        self.assertEqual(res.metrics.get("collisionCount"), 0)
+        self.assertEqual(res.metrics.get("graspState"), "placed")
+        self.assertGreater(res.metrics.get("objectLifted", 0), 0.05)
+        self.assertTrue(res.metrics.get("placeStable"), "cube A must rest on shelf")
+
+    def test_relay_real_fetch_settles(self):
+        b = Bridge(ROBOT, PAYEE, ":memory:")
+        code, _ = b.request_action(paid("muj-fetch", "k-muj-fetch", "auth-muj-fetch"))
+        self.assertEqual(code, 202)
+        r = b.actions["muj-fetch"]
+        self.assertEqual(r["status"], "success")
+        self.assertTrue(r["settlementEligible"], "real sim success must settle")
+        self.assertEqual(r["metrics"].get("engine"), "mujoco")
+
+
+if __name__ == "__main__":
+    unittest.main()
