@@ -1,0 +1,48 @@
+schemaVersion: robot-profile.v1
+profileId: limx.tron1.wheeled-mujoco-webots-obstacle-nav.v1
+profileVersion: 1.0.0
+vendor: limx
+robotModel: tron1-wf
+robotId: limx-tron1-wf-sim-01
+robotType: wheeled-biped-simulator
+scope: simulator-only
+status: experimental
+runtime:
+  transport: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  metricsTopic: robot/limx_tron1/metrics
+  readyTopic: robot/limx_tron1/ready
+  bridge: bridge/limx_tron1_sim/bridge.py
+  replayStore: artifacts/state/limx_tron1_replay.sqlite3
+simulators:
+  - MuJoCo 3.3.0
+  - Webots R2025a
+modelIdentity:
+  label: LimX Dynamics TRON 1 wheeled-foot variant WF_TRON1A
+  source: https://github.com/limxdynamics/robot-description
+  sourceCommit: 469df8dbb56802b127ca8e2c5df23360c6c5488d
+  sourceLicense: Apache-2.0
+  urdf: vendor/limxdynamics/robot-description/WF_TRON1A/urdf/robot.urdf
+  urdfSha256: e5aa9ee49e4e39c201da225e1f734318331c70383ab941da17d80ae59f90e46e
+  mjcf: vendor/limxdynamics/robot-description/WF_TRON1A/xml/robot.xml
+  mjcfSha256: d32c5ea50fddbfbbd9d8cc8abab476b9e02b3b2bd4b4949afb64c646769d0f0c
+  webotsModel: Generated from the same pinned vendor URDF; no substitute geometry.
+controlIdentity:
+  source: https://github.com/limxdynamics/tron1-rl-deploy-python
+  sourceCommit: 08b1f113444b85f2f24505a1a7a01a462cf77068
+  sourceLicense: Apache-2.0
+  policy: vendor/limxdynamics/tron1-rl-deploy-python/WF_TRON1A/policy/isaacgym/policy.onnx
+  policySha256: bfc4617f65cef4b1c952156352dd2fee0deffd68458959a20b4bc0bb0285d85b
+tunnelBoundary:
+  requiredContract: correlated-post-verification-action-event.v1
+  trust: >-
+    The bridge accepts only the private Tunnel-to-robot Zenoh boundary after
+    x402 verification. It rejects uncorrelated events and never verifies or
+    settles payment itself.
+  identityBinding: >-
+    Robot WebSocket identity-to-payee binding is an upstream shared
+    Tunnel/Gateway protocol responsibility. This profile does not invent a
+    local identity-signing protocol.
+maintainers:
+  - github: RobotDeveloper1
