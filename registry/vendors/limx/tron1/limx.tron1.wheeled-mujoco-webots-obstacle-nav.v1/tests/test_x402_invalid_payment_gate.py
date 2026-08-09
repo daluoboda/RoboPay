@@ -135,6 +135,7 @@ class _ZenohSimulator:
         self.endpoint = _free_endpoint()
         self.mode = mode
         self.actions: list[dict] = []
+        self.state_changes = 0
         self.session = zenoh.open(
             zenoh.Config.from_json5(
                 json.dumps(
@@ -152,6 +153,9 @@ class _ZenohSimulator:
     def _on_action(self, sample) -> None:
         event = json.loads(bytes(sample.payload.to_bytes()))
         self.actions.append(event)
+        # This callback is the simulator actuation boundary: without a Zenoh
+        # ActionEvent there is no command capable of changing simulator state.
+        self.state_changes += 1
         if self.mode == "silent":
             return
         self.publisher.put(
@@ -322,6 +326,7 @@ def test_facilitator_rejected_paid_shape_fails_before_action_boundary() -> None:
         assert rejected.status_code == 402
         time.sleep(0.8)
         assert len(run.simulator.actions) == 0, "invalid payment published an executable ActionEvent"
+        assert run.simulator.state_changes == 0, "invalid payment crossed the simulator state-change boundary"
         assert not _settle_calls(), "invalid payment reached settlement"
         assert any(path == "/verify" for path, _ in RecordingFacilitator.calls)
     finally:
@@ -358,6 +363,7 @@ def test_failed_or_timed_out_action_never_settles_and_replay_never_reexecutes(mo
         assert terminal["state"] == expected_state
         assert terminal.get("settled") is False
         assert len(run.simulator.actions) == 1
+        assert run.simulator.state_changes == 1
         assert not _settle_calls()
 
         replay = requests.post(
@@ -369,6 +375,7 @@ def test_failed_or_timed_out_action_never_settles_and_replay_never_reexecutes(mo
         assert replay.status_code == 409
         assert replay.json()["error_code"] == "REPLAY_DETECTED"
         assert len(run.simulator.actions) == 1
+        assert run.simulator.state_changes == 1
         assert not _settle_calls()
     finally:
         run.close()

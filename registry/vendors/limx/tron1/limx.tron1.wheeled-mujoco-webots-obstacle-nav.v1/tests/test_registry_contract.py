@@ -57,3 +57,24 @@ def test_profile_docs_and_public_action_examples_are_present() -> None:
         assert example["actionId"]
         assert example["idempotencyKey"]
         assert example["params"] == {}
+
+
+def test_webots_controller_is_actuator_driven_and_cannot_write_robot_root() -> None:
+    controller = (
+        ROOT
+        / "simulators/webots/controllers/limx_tron1_obstacle_controller/limx_tron1_obstacle_controller.py"
+    ).read_text(encoding="utf-8")
+    world = (ROOT / "simulators/webots/scenes/tron1_obstacle_course_template.wbt").read_text(
+        encoding="utf-8"
+    )
+
+    assert "LimXOnnxPolicy" in controller
+    assert ".setTorque(" in controller
+    assert "basicTimeStep 2" in world
+    for forbidden_root_write in (
+        "setSFVec3f",
+        "setSFRotation",
+        "resetPhysics",
+        "simulationReset",
+    ):
+        assert forbidden_root_write not in controller

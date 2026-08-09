@@ -8,10 +8,14 @@ USDC on Base Sepolia.
 
 ## Locally revalidated results
 
-- MuJoCo 3.3.0: 7/7 waypoints, three obstacles detected, goal reached, no
-  contact, minimum clearance `0.0775 m`; official LimX policy/encoder ONNX.
-- Webots R2025a: 7/7 waypoints, three obstacles detected, goal reached, no
-  contact; official URDF and STL geometry converted by `urdf2webots`.
+- MuJoCo 3.3.0: 10/10 waypoints, three obstacles detected, goal reached, no
+  collision, `0.2174 m` minimum clearance and `5.3616 m` measured final x.
+  The official LimX policy/encoder ONNX drives the pinned vendor MJCF.
+- Webots R2025a: 10/10 waypoints, three obstacles detected, goal reached, no
+  obstacle contact, `0.1058 m` minimum clearance and `5.3924 m` measured base
+  displacement. The same pinned policy drives all eight vendor joints at a
+  500 Hz physics rate; GPS/IMU/gyro/joint state is terminal authority and the
+  controller performs zero Supervisor root-pose writes.
 - Sim-to-Sim contract: same model variant, course, waypoint count, obstacles,
   success boundary and measured terminal goal state.
 - Real Zenoh: one valid correlated event executes once; replay publishes a
@@ -39,8 +43,8 @@ and runs in WSL/Linux with `TUNNEL_BIN=.../bin/tunnel` and
 
 ## Deliberate boundaries
 
-Webots uses its Supervisor-measured root pose as terminal authority while a
-bounded profile controller drives the official converted robot through the
-canonical route. Dynamic equivalence with the LimX reinforcement-learning
-controller is asserted only for MuJoCo. Identity signing between the shared
-Gateway and robot WebSocket remains upstream, as directed by maintainer review.
+Both simulators use the pinned LimX reinforcement-learning controller to drive
+physical joints through the canonical route. Webots uses Supervisor only to
+read measured simulator state and contacts; it never writes or resets the robot
+root pose. Identity signing between the shared Gateway and robot WebSocket
+remains upstream, as directed by maintainer review.

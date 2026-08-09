@@ -19,15 +19,16 @@ mappings:
     task: fixed_three_obstacle_navigation
     policy: >-
       A shared state-driven route planner selects velocity commands from the
-      measured base pose. MuJoCo maps them through LimX's official ONNX policy;
-      no qpos teleport or prerecorded trajectory is used in MuJoCo.
+      measured base pose. Both simulators map them through LimX's pinned official
+      ONNX policy into joint torques; no root-pose write, qpos teleport or
+      prerecorded trajectory is used.
     inputs: []
     metrics: [waypoints_completed, detected_obstacles, minimum_clearance_m, collision, goal_distance_m, final_base_pose]
     limits:
       maxDurationSec: 70
       maxLinearVelocityMps: 0.65
       maxYawRateRadPerSec: 0.5
-    success: seven waypoints and goal reached, all obstacles detected, no collision, finite safe state
+    success: ten waypoints and goal reached, all obstacles detected, no collision, finite safe state
   stop:
     task: safe_stop
     output: correlated terminal safe-stop result

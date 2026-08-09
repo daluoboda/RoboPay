@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from limx_tron1_sim.contracts import NAVIGATION_SKILL, NavigationRequest
+from limx_tron1_sim.course import OBSTACLES, WAYPOINTS
 from limx_tron1_sim.model import PROFILE_ROOT
 from limx_tron1_sim.runtime import run_mujoco_episode
 from limx_tron1_sim.webots import run_webots_episode
@@ -16,8 +17,8 @@ def main() -> int:
     checks = {
         "both_succeeded": bool(mujoco_result["success"] and webots_result["success"]),
         "same_model_variant": mujoco_result["model_variant"] == "WF_TRON1A" and "WF_TRON1A" in webots_result["model_variant"],
-        "same_waypoint_count": mujoco_result["waypoints_completed"] == webots_result["waypoints_completed"] == 7,
-        "all_obstacles_detected": len(mujoco_result["detected_obstacles"]) == len(webots_result["detected_obstacles"]) == 3,
+        "same_waypoint_count": mujoco_result["waypoints_completed"] == webots_result["waypoints_completed"] == len(WAYPOINTS),
+        "all_obstacles_detected": len(mujoco_result["detected_obstacles"]) == len(webots_result["detected_obstacles"]) == len(OBSTACLES),
         "no_collision": not mujoco_result["collision"] and not webots_result["collision"],
         "measured_goal_reached": mujoco_result["goal_distance_m"] <= 0.34 and webots_result["goal_distance_m"] <= 0.34,
     }

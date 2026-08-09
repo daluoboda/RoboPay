@@ -13,11 +13,13 @@ meshes; it does not use a substitute robot.
 
 ## What the action does
 
-`navigate_obstacle_course` follows seven state-driven waypoints around three
+`navigate_obstacle_course` follows ten state-driven waypoints through a
+three-obstacle slalom corridor
 physical obstacles and terminates only from measured simulator state. MuJoCo
 uses the vendor policy to turn current base/joint observations and velocity
-commands into torques. Webots runs the same bounded route against the converted
-vendor geometry and reports measured root translation/rotation. Success means
+commands into torques. Webots evaluates the same pinned vendor ONNX policy at
+50 Hz, applies its torques to all eight joints at a 500 Hz physics rate, and
+reads GPS, IMU, gyro and joint sensors from the converted vendor model. Success means
 all waypoints and the goal were reached, all obstacles were detected and no
 obstacle contact occurred. `stop` is a separate zero-velocity terminal path.
 

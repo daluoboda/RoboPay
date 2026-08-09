@@ -1,4 +1,5 @@
 from limx_tron1_sim.contracts import NAVIGATION_SKILL, STOP_SKILL, NavigationRequest
+from limx_tron1_sim.course import OBSTACLES, WAYPOINTS
 from limx_tron1_sim.runtime import run_mujoco_episode
 
 
@@ -7,8 +8,8 @@ def test_official_model_and_policy_complete_measured_course() -> None:
     assert result["success"] is True
     assert result["model_variant"] == "WF_TRON1A"
     assert result["low_level_controller"] == "limx-isaacgym-onnx-policy"
-    assert result["waypoints_completed"] == result["waypoints_total"] == 7
-    assert len(result["detected_obstacles"]) == 3
+    assert result["waypoints_completed"] == result["waypoints_total"] == len(WAYPOINTS)
+    assert len(result["detected_obstacles"]) == len(OBSTACLES)
     assert result["collision"] is False
     assert result["minimum_clearance_m"] > 0.05
 
