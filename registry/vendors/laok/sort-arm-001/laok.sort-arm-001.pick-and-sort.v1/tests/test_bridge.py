@@ -104,3 +104,43 @@ def test_txhash_format_validation():
     assert not TXHASH_RE.match("abc")
     assert not TXHASH_RE.match("0x" + "a" * 63)
     assert not TXHASH_RE.match("0x" + "a" * 65)
+
+
+
+import unittest
+
+try:
+    import mujoco  # noqa: F401
+    HAVE_MUJOCO = True
+except Exception:
+    HAVE_MUJOCO = False
+
+from simulator import MuJoCoSimulator  # noqa: E402
+
+
+@unittest.skipUnless(HAVE_MUJOCO, "mujoco not installed")
+class TestRealMuJoCoCorrelated(unittest.TestCase):
+    """The bridge settles ONLY when the REAL physics backend succeeds."""
+
+    def test_real_sort_succeeds(self):
+        res = MuJoCoSimulator().pick_and_sort({})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.reason}")
+        self.assertEqual(res.metrics.get("engine"), "mujoco")
+        self.assertEqual(res.metrics.get("collisionCount"), 0)
+        self.assertEqual(res.metrics.get("graspState"), "released")
+        self.assertTrue(res.metrics.get("routed"), "object must land in target bin")
+        self.assertGreater(res.metrics.get("peakLift", 0), 0.05)
+        self.assertLess(res.metrics.get("accuracy", 1), 0.07)
+
+    def test_relay_real_sort_settles(self):
+        b = Bridge(ROBOT, PAYEE, ":memory:")
+        code, _ = b.request_action(paid("muj-sort", "k-muj-sort", "auth-muj-sort"))
+        self.assertEqual(code, 202)
+        r = b.actions["muj-sort"]
+        self.assertEqual(r["status"], "success")
+        self.assertTrue(r["settlementEligible"], "real sim success must settle")
+        self.assertEqual(r["metrics"].get("engine"), "mujoco")
+
+
+if __name__ == "__main__":
+    unittest.main()
