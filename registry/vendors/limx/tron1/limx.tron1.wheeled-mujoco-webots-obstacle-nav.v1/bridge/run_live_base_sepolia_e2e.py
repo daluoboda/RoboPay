@@ -40,8 +40,6 @@ SKILL_CATALOG = PROFILE_ROOT / "skill-catalog.json"
 NETWORK = "eip155:84532"
 PRICE_USDC = "0.001"
 FACILITATOR_URL = "https://x402.org/facilitator"
-FABRIC_API_BASE = os.environ.get("FABRIC_API_BASE_URL", "https://api.fabric.foundation/api/core").rstrip("/")
-FABRIC_PROXY_WS = os.environ.get("PROXY_WS_URL", "wss://api.fabric.foundation/api/core/ws/robot")
 
 
 def _required(name: str) -> str:
@@ -102,16 +100,6 @@ def _wait_for_tunnel(proxy: LocalTunnelProxy, tunnel: subprocess.Popen[str]) -> 
     if tunnel.poll() is not None:
         raise RuntimeError(f"Tunnel exited before connecting (exit={tunnel.returncode})")
     raise RuntimeError("Tunnel did not connect to the local visual proxy")
-
-
-def _wait_for_public_tunnel(tunnel: subprocess.Popen[str]) -> None:
-    """Give the native Tunnel time to establish the authenticated public WS."""
-
-    deadline = time.monotonic() + 12
-    while time.monotonic() < deadline:
-        if tunnel.poll() is not None:
-            raise RuntimeError(f"Tunnel exited before connecting to the Fabric proxy (exit={tunnel.returncode})")
-        time.sleep(0.5)
 
 
 def _wait_for_terminal(status_url: str, *, timeout_seconds: float = 120.0) -> dict[str, Any]:
@@ -308,20 +296,19 @@ def main(argv: list[str] | None = None) -> int:
             stderr=None if args.visual else subprocess.STDOUT,
             text=True,
         )
-        # The OBS launcher intentionally uses localhost so the operator can
-        # show every request.  CI instead connects the real Tunnel to the
-        # hosted Fabric proxy, exactly like the Spot evidence workflow.
-        proxy: LocalTunnelProxy | None = None
+        # Registration in the hosted gateway happens only after profile
+        # approval.  Both CI and the OBS runner therefore expose the real Go
+        # Tunnel through the same local WebSocket/HTTP boundary while keeping
+        # x402 verification, the public facilitator and Base Sepolia live.
+        proxy = LocalTunnelProxy(verbose=args.visual)
+        proxy.start()
         if args.ci:
             start_tunnel = _start_native_tunnel
-            proxy_url = FABRIC_PROXY_WS
-            base_url = f"{FABRIC_API_BASE}/robots/{ROBOT_ID}"
+            proxy_url = f"ws://127.0.0.1:{proxy.port}/ws"
         else:
-            proxy = LocalTunnelProxy(verbose=args.visual)
-            proxy.start()
             start_tunnel = _start_wsl_tunnel
             proxy_url = f"ws://{_wsl_host_address()}:{proxy.port}/ws"
-            base_url = f"http://127.0.0.1:{proxy.port}/robots/{ROBOT_ID}"
+        base_url = f"http://127.0.0.1:{proxy.port}/robots/{ROBOT_ID}"
         tunnel = start_tunnel(
             binary=binary,
             config=config,
@@ -333,10 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         output_thread = _stream_output(tunnel, prefix="tunnel", enabled=args.visual)
         try:
             _wait_for_bridge_ready(ready, bridge)
-            if proxy is None:
-                _wait_for_public_tunnel(tunnel)
-            else:
-                _wait_for_tunnel(proxy, tunnel)
+            _wait_for_tunnel(proxy, tunnel)
             robot_discovery = requests.get(base_url, timeout=30)
             robot_discovery.raise_for_status()
             print("[client] robot discovery", json.dumps(robot_discovery.json(), indent=2), flush=True)

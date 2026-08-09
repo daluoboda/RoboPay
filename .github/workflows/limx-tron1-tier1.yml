@@ -149,7 +149,6 @@ jobs:
           ROBO_PAYEE_ADDRESS: ${{ secrets.ROBO_PAYEE_ADDRESS }}
           TUNNEL_BIN: ${{ github.workspace }}/bin/tunnel
           LD_LIBRARY_PATH: ${{ github.workspace }}/.zenoh-c/lib
-          PROXY_WS_URL: wss://api.fabric.foundation/api/core/ws/robot
           PYTHONPATH: ${{ github.workspace }}/${{ env.PROFILE }}/bridge
         run: python "$PROFILE/bridge/run_live_base_sepolia_e2e.py" --ci
       - name: Upload generated Base Sepolia evidence
