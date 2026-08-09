@@ -129,3 +129,48 @@ def test_pi_payment_accepted(bridge):
     r = bridge.actions["pi1"]
     assert r["status"] == "success"
     assert r["settlementEligible"] is True
+
+
+
+import unittest
+
+# ---------------------------------------------------------------------------
+# Real MuJoCo correlation (reviewer: "correlated simulator result").
+# Runs the ACTUAL physics backend (not a stub) and proves the simulator
+# outcome is what drives settlement. Skipped where mujoco is unavailable so a
+# CI image without the engine stays green.
+# ---------------------------------------------------------------------------
+try:
+    import mujoco  # noqa: F401
+    HAVE_MUJOCO = True
+except Exception:
+    HAVE_MUJOCO = False
+
+from simulator import MuJoCoSimulator  # noqa: E402
+
+
+@unittest.skipUnless(HAVE_MUJOCO, "mujoco not installed")
+class TestRealMuJoCoCorrelated(unittest.TestCase):
+    """The bridge settles ONLY when the REAL physics backend succeeds."""
+
+    def test_real_stack_succeeds(self):
+        res = MuJoCoSimulator().pick_and_stack({})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.reason}")
+        self.assertEqual(res.metrics.get("engine"), "mujoco")
+        self.assertEqual(res.metrics.get("collisionCount"), 0)
+        self.assertEqual(res.metrics.get("graspState"), "stacked")
+        self.assertGreater(res.metrics.get("objectLifted", 0), 0.05)
+        self.assertTrue(res.metrics.get("stackStable"), "cube A must rest on B")
+
+    def test_relay_real_stack_settles(self):
+        b = Bridge(ROBOT, PAYEE, ":memory:")
+        code, _ = b.request_action(paid("muj-stack", "k-muj-stack", "auth-muj-stack"))
+        self.assertEqual(code, 202)
+        r = b.actions["muj-stack"]
+        self.assertEqual(r["status"], "success")
+        self.assertTrue(r["settlementEligible"], "real sim success must settle")
+        self.assertEqual(r["metrics"].get("engine"), "mujoco")
+
+
+if __name__ == "__main__":
+    unittest.main()
