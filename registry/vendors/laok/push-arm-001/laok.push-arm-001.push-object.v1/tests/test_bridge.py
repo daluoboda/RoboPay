@@ -104,3 +104,43 @@ def test_txhash_format_validation():
     assert not TXHASH_RE.match("abc")
     assert not TXHASH_RE.match("0x" + "a" * 63)
     assert not TXHASH_RE.match("0x" + "a" * 65)
+
+
+
+import unittest
+
+try:
+    import mujoco  # noqa: F401
+    HAVE_MUJOCO = True
+except Exception:
+    HAVE_MUJOCO = False
+
+from simulator import MuJoCoSimulator  # noqa: E402
+
+
+@unittest.skipUnless(HAVE_MUJOCO, "mujoco not installed")
+class TestRealMuJoCoCorrelated(unittest.TestCase):
+    """The bridge settles ONLY when the REAL physics backend succeeds."""
+
+    def test_real_push_succeeds(self):
+        res = MuJoCoSimulator().push_object({})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.reason}")
+        self.assertEqual(res.metrics.get("engine"), "mujoco")
+        self.assertEqual(res.metrics.get("collisionCount"), 0)
+        # sustained blade<->payload contact proves a real shove, not a nudge
+        self.assertGreater(res.metrics.get("contactSamples", 0), 0)
+        d = res.metrics.get("objectDelta", [0, 0, 0])
+        self.assertGreater(abs(d[0]) + abs(d[1]), 0.0, "payload must actually move")
+
+    def test_relay_real_push_settles(self):
+        b = Bridge(ROBOT, PAYEE, ":memory:")
+        code, _ = b.request_action(paid("muj-push", "k-muj-push", "auth-muj-push"))
+        self.assertEqual(code, 202)
+        r = b.actions["muj-push"]
+        self.assertEqual(r["status"], "success")
+        self.assertTrue(r["settlementEligible"], "real sim success must settle")
+        self.assertEqual(r["metrics"].get("engine"), "mujoco")
+
+
+if __name__ == "__main__":
+    unittest.main()
