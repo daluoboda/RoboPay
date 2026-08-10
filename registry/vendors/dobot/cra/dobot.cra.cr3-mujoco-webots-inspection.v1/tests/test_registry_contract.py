@@ -32,7 +32,11 @@ def test_registry_and_payment_policy_do_not_drift() -> None:
     assert {entry["priceUSDC"] for entry in policy["policies"]} == {"0.001"}
     assert {entry["price_usdc"] for entry in catalog} == {"0.001"}
     source = ROOT / profile["modelIdentity"]["urdf"]
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == profile["modelIdentity"]["urdfSha256"]
+    source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    assert source_sha256 == profile["modelIdentity"]["urdfSha256"]
+    assert source_sha256 == mapping["model"]["urdfSha256"]
+    evidence = _yaml("docs/evidence/evidence-manifest.yaml")
+    assert source_sha256 == evidence["provenance"]["vendorUrdfSha256"]
 
 
 def test_profile_docs_and_public_action_examples_are_present() -> None:

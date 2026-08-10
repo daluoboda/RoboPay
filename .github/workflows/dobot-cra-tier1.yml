@@ -39,7 +39,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/bridge
         run: |
-          python -m pytest -q registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_contract.py registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_bridge_contract.py registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_registry_contract.py
+          python -m pytest -q registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_contract.py registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_bridge_contract.py registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_registry_contract.py registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/tests/test_webots_generation.py
       - name: Prove invalid payment cannot reach Zenoh, simulator, or settlement
         env:
           PYTHONPATH: ${{ github.workspace }}/registry/vendors/dobot/cra/dobot.cra.cr3-mujoco-webots-inspection.v1/bridge

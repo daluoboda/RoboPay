@@ -4,7 +4,7 @@ model:
   source: https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4
   commit: 0f67ed938c0cec4ed0808af759ddbb608e573dbe
   urdf: vendor/DOBOT_6Axis_ROS2_V4/cr3_robot.urdf
-  urdfSha256: 6a790fefbba0871f91819a8f8a29a5780b5952026d98396179b4eeb907859e66
+  urdfSha256: 66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3
   mujoco: MuJoCo compiles the pinned vendor URDF with a documented, bounded profile-owned actuator overlay.
   webots: urdf2webots converts the same pinned vendor URDF at run time for Webots R2025a.
 skills:

@@ -5,9 +5,11 @@ generatedArtifacts:
     command: py -3 bridge/run_sim2sim_validation.py
     claim: Real MuJoCo and Webots independently execute the canonical three-tag task.
     requiredFields: [success, acceptance_checks, mujoco.observed_tags, webots.observed_tags]
-  - path: artifacts/state/dobot_cr3_replay.sqlite3
+testEvidence:
+  - artifact: pytest-managed temporary replay.sqlite3
     command: pytest -q tests/test_bridge_contract.py
-    claim: Durable payment-bound idempotency survives a fresh execution boundary.
+    claim: Durable payment-bound idempotency survives a fresh execution boundary in an isolated temporary store.
+    runtimeDefaultPath: artifacts/state/dobot_cr3_replay.sqlite3
 externalEvidenceRequiredBeforeLiveClaim:
   - artifact: Base Sepolia x402 receipt and correlated Tunnel status result
     prerequisite: Hardened correlated-post-verification-action-event.v1 Tunnel deployment
@@ -19,4 +21,4 @@ externalEvidenceRequiredBeforeLiveClaim:
 provenance:
   vendorSource: https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4
   vendorCommit: 0f67ed938c0cec4ed0808af759ddbb608e573dbe
-  vendorUrdfSha256: 6a790fefbba0871f91819a8f8a29a5780b5952026d98396179b4eeb907859e66
+  vendorUrdfSha256: 66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3

@@ -47,6 +47,9 @@ payment requirement, the `202` accepted response, and the terminal settlement
 status. On success it can open the transaction in BaseScan. The small local
 HTTP/WebSocket proxy is only a visible transport stand-in for the hosted
 gateway; it does not emulate the facilitator, payment, Zenoh, or simulator.
+It subscribes to the bridge-ready event before starting the bridge and sends no
+paid action until that event arrives. Its WebSocket reader reassembles
+continuation frames, including a fragmented first response.
 
 The launcher expects the **same catalog-aware hardened Tunnel contract used by
 the Spot Tier 1 base**. Point it at that Tunnel binary and supply deployment

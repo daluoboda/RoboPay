@@ -12,23 +12,24 @@ It does not claim physical-robot validation.
 
 ## Automated validation
 
-The Dobot Tier 1 GitHub Actions run for this revision passed all jobs:
+The mandatory automated validation covers:
 
 - real Go Tunnel build and contract suite;
 - fail-closed payment regression: a paid-shaped request rejected by the
   facilitator returns `402`, publishes zero ActionEvents, invokes zero
   simulator actions, and makes zero settlement calls;
+- the submitted WebSocket reader reassembles continuation frames, while the
+  live runner waits for the bridge-ready event before its first paid action;
 - failure, timeout, idempotency-key replay, and payment replay tests: zero
   settlement on every unsuccessful path;
 - real MuJoCo CR3 inspection plus a real in-process Zenoh action/result path;
-- real Webots/MuJoCo Sim-to-Sim validation of the identical three-tag course;
-- Base Sepolia x402 proof using repository Secrets, with the generated
-  receipt/result JSON uploaded as a CI artifact.
+- real Webots/MuJoCo Sim-to-Sim validation of the identical three-tag course.
+
+The repository does not represent live Base Sepolia proof or an operator
+recording as captured. Those remain trusted-run evidence requirements in
+[`evidence-manifest.yaml`](evidence/evidence-manifest.yaml).
 
 The local reproducible commands are in the [profile README](../README.md).
-The screen recording attached to the pull request shows discovery, unpaid
-`402`, paid `202`, Zenoh-mediated execution in MuJoCo, terminal success, and
-the Base Sepolia settlement transaction.
 
 ## Identity boundary
 

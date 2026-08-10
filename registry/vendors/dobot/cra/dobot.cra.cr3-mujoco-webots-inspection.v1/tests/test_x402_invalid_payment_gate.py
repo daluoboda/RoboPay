@@ -27,7 +27,7 @@ import requests
 import zenoh
 
 from dobot_cra_sim.contracts import INSPECTION_SKILL, ROBOT_ID
-from dobot_cra_sim.visual_proxy import LocalTunnelProxy
+from dobot_cra_sim.visual_proxy import LocalTunnelProxy, TunnelConnection
 
 
 PROFILE_ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +37,30 @@ ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
 NETWORK = "eip155:84532"
 PAYEE = "0x0000000000000000000000000000000000000001"
+
+
+def _frame(payload: bytes, opcode: int, final: bool) -> bytes:
+    header = bytes([(0x80 if final else 0) | opcode])
+    if len(payload) < 126:
+        return header + bytes([len(payload)]) + payload
+    return header + bytes([126]) + len(payload).to_bytes(2, "big") + payload
+
+
+def test_websocket_reader_reassembles_continuation_frames() -> None:
+    """The first paid response may be fragmented by the Fabric relay."""
+
+    reader, writer = socket.socketpair()
+    try:
+        writer.sendall(
+            _frame(b'{"id":"dobot-paid",', opcode=1, final=False)
+            + _frame(b'"status":202}', opcode=0, final=True)
+        )
+        opcode, payload = TunnelConnection(reader)._read_message()
+        assert opcode == 1
+        assert json.loads(payload) == {"id": "dobot-paid", "status": 202}
+    finally:
+        reader.close()
+        writer.close()
 
 
 class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):

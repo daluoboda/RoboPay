@@ -13,4 +13,4 @@ def test_webots_proto_is_generated_from_the_pinned_vendor_urdf(tmp_path: Path) -
     assert "Dobot-Arm/DOBOT_6Axis_ROS2_V4" in content
     assert "0f67ed938c0cec4ed0808af759ddbb608e573dbe" in content
     assert "\\" not in content
-    assert vendor_urdf_sha256() == "6a790fefbba0871f91819a8f8a29a5780b5952026d98396179b4eeb907859e66"
+    assert vendor_urdf_sha256() == "66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3"
