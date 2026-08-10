@@ -92,7 +92,7 @@ The result repeats `action_id`, `robot_id`, `skill_id`, `idempotency_key` and
   facilitator response returns `402` and publishes zero ActionEvents.
 - The Tunnel settles only after the correlated terminal result reports success.
   Failure, timeout and invalid payment remain unsettled.
-- The same durable JSON replay implementation accepted in PR 58 protects the
+- The checked-in durable JSON replay implementation protects the
   public Tunnel boundary. The profile additionally persists its private Zenoh
   execution reservation in SQLite, bound to action ID, idempotency key and
   payment fingerprint.
@@ -134,8 +134,8 @@ so the simulator and settlement can appear in the same recording.
 
 ## CI and evidence
 
-`.github/workflows/limx-tron1-tier1.yml` runs the same hardened Tunnel used by
-PR 58, the adversarial `isValid:false` regression, failure/timeout
+`.github/workflows/limx-tron1-tier1.yml` builds and runs the checked-in hardened
+Tunnel, the adversarial `isValid:false` regression, failure/timeout
 non-settlement, durable replay, real Zenoh, official-policy MuJoCo, real Webots
 Sim-to-Sim, and a trusted push/workflow-dispatch Base Sepolia settlement job.
 The live runner waits for an explicit bridge-ready event, sends the paid action

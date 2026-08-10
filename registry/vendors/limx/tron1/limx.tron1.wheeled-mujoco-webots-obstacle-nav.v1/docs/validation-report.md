@@ -21,10 +21,10 @@ USDC on Base Sepolia.
 - **Sim-to-Sim:** both simulators complete the same model/task/terminal
   contract. MuJoCo is actuator-level; Webots is explicitly task-level.
 
-## Locally revalidated results
+## Locally revalidated results (2026-08-10)
 
 - MuJoCo 3.3.0: 10/10 waypoints, three obstacles detected, goal reached, no
-  collision, `0.2174 m` minimum clearance and `5.3616 m` measured final x.
+  collision, `0.2016 m` minimum clearance and `5.3617 m` measured final x.
   The official LimX policy/encoder ONNX drives the pinned vendor MJCF.
 - Webots R2025a: 10/10 waypoints, three obstacles detected, goal reached, no
   obstacle contact, `0.2395 m` minimum clearance and `5.3646 m` measured base
