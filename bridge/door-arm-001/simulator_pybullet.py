@@ -1,4 +1,12 @@
-"""door-arm-001 --- PyBullet backend for the door-opening skill."""
+"""door-arm-001 --- PyBullet backend for the door-opening skill.
+
+Key fixes for real-sim agreement:
+- All links carry mass + inertia so PyBullet treats them as dynamic bodies.
+- Finger origins shifted from y=±0.065 to y=±0.025 so the inner edges
+  can reach the handle at y=0.04 even with a 0.016 m box width.
+- Finger pad z-origin moved from -0.045 to -0.020 so the pad mid-point
+  coincides with the wrist when the arm targets the handle centre.
+"""
 from __future__ import annotations
 
 import tempfile
@@ -7,50 +15,178 @@ from pathlib import Path
 
 import numpy as np
 
+
 def available() -> bool:
     try:
         import pybullet as p
-        if getattr(p, '__file__', '').endswith('bullet_stub.py'):
+        if getattr(p, "__file__", "").endswith("bullet_stub.py"):
             return False
-        return hasattr(p, 'loadURDF') and callable(p.loadURDF)
+        return hasattr(p, "loadURDF") and callable(p.loadURDF)
     except Exception:
         return False
 
+
+# ------------------------------------------------------------------ URDFs ---
+
+def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
+    """Return <inertial> block for a box of half-size (hx,hy,hz) and mass m."""
+    Ixx = m * (4 * hy * hy + 4 * hz * hz) / 12.0
+    Iyy = m * (4 * hx * hx + 4 * hz * hz) / 12.0
+    Izz = m * (4 * hx * hx + 4 * hy * hy) / 12.0
+    return (
+        f'<inertial>\n'
+        f'  <origin xyz="0 0 0"/>\n'
+        f'  <mass value="{m:.6f}"/>\n'
+        f'  <inertia ixx="{Ixx:.6f}" iyy="{Iyy:.6f}" izz="{Izz:.6f}" '
+        f'ixy="0.0" ixz="0.0" iyz="0.0"/>\n'
+        f'</inertial>'
+    )
+
+
 def _robot_urdf() -> str:
-    return """<?xml version="1.0" ?>
+    # Link masses (kg) — small robot, realistic but not too heavy
+    m_base = 2.0
+    m_col = 1.5
+    m_up = 1.0
+    m_fore = 0.8
+    m_wr = 0.3
+    m_fg = 0.15
+
+    return f"""<?xml version="1.0" ?>
 <robot name="door-arm-001">
-  <link name="base"><visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual><collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision></link>
-  <link name="column"><visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual><collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision></link>
-  <joint name="pan" type="revolute"><parent link="base"/><child link="column"/><origin xyz="0 0 0.05"/><axis xyz="0 0 1"/><limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/></joint>
-  <link name="upper"><visual><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual><collision><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision></link>
-  <joint name="shoulder" type="revolute"><parent link="column"/><child link="upper"/><origin xyz="0 0 0.35"/><axis xyz="0 1 0"/><limit lower="-2.0" upper="2.0" effort="100" velocity="10"/></joint>
-  <link name="fore"><visual><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual><collision><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision></link>
-  <joint name="elbow" type="revolute"><parent link="upper"/><child link="fore"/><origin xyz="0.28 0 0"/><axis xyz="0 1 0"/><limit lower="-2.6" upper="2.6" effort="100" velocity="10"/></joint>
-  <link name="wrist"><visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual><collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision></link>
-  <joint name="wristp" type="revolute"><parent link="fore"/><child link="wrist"/><origin xyz="0.24 0 0"/><axis xyz="0 1 0"/><limit lower="-2.8" upper="2.8" effort="100" velocity="10"/></joint>
-  <link name="finger_l"><visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual><collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision></link>
-  <joint name="grip_l" type="prismatic"><parent link="wrist"/><child link="finger_l"/><origin xyz="0 0 -0.065"/><axis xyz="0 1 0"/><limit lower="0.012" upper="0.060" effort="50" velocity="5"/></joint>
-  <link name="finger_r"><visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual><collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision></link>
-  <joint name="grip_r" type="prismatic"><parent link="wrist"/><child link="finger_r"/><origin xyz="0 0 -0.065"/><axis xyz="0 -1 0"/><limit lower="0.012" upper="0.060" effort="50" velocity="5"/></joint>
+  <link name="base">
+    <visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual>
+    <collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision>
+    {_mass_box(m_base, 0.07, 0.07, 0.025)}
+  </link>
+  <link name="column">
+    <visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
+    <collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
+    {_mass_box(m_col, 0.035, 0.035, 0.175)}
+  </link>
+  <joint name="pan" type="revolute">
+    <parent link="base"/><child link="column"/>
+    <origin xyz="0 0 0.05"/><axis xyz="0 0 1"/>
+    <limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/>
+  </joint>
+  <link name="upper">
+    <visual><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
+    {_mass_box(m_up, 0.14, 0.03, 0.03)}
+  </link>
+  <joint name="shoulder" type="revolute">
+    <parent link="column"/><child link="upper"/>
+    <origin xyz="0 0 0.35"/><axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
+  </joint>
+  <link name="fore">
+    <visual><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
+    {_mass_box(m_fore, 0.12, 0.026, 0.026)}
+  </link>
+  <joint name="elbow" type="revolute">
+    <parent link="upper"/><child link="fore"/>
+    <origin xyz="0.28 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-2.6" upper="2.6" effort="100" velocity="10"/>
+  </joint>
+  <link name="wrist">
+    <visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual>
+    <collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision>
+    {_mass_box(m_wr, 0.032, 0.030, 0.018)}
+  </link>
+  <joint name="wristp" type="revolute">
+    <parent link="fore"/><child link="wrist"/>
+    <origin xyz="0.24 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
+  </joint>
+  <!--
+    Finger pad z-origin: -0.020  (was -0.045).
+    With wrist at handle_z, pad centre sits at handle_z  (was 6.5mm too low).
+  -->
+  <link name="finger_l">
+    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    {_mass_box(m_fg, 0.014, 0.008, 0.045)}
+  </link>
+  <!--
+    Finger y-origin: -0.025  (was -0.065).
+    With box half-width 0.008 and joint max 0.060,
+    left finger inner edge reaches y ≈ -0.025+0.060-0.008 = +0.027
+    right finger inner edge reaches y ≈ +0.025-0.060+0.008 = -0.027
+    → gap when fully open ≈ 0.054 m; handle at y=0.04 sits inside.
+  -->
+  <joint name="grip_l" type="prismatic">
+    <parent link="wrist"/><child link="finger_l"/>
+    <origin xyz="0 -0.025 -0.020"/><axis xyz="0 1 0"/>
+    <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
+  </joint>
+  <link name="finger_r">
+    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    {_mass_box(m_fg, 0.014, 0.008, 0.045)}
+  </link>
+  <joint name="grip_r" type="prismatic">
+    <parent link="wrist"/><child link="finger_r"/>
+    <origin xyz="0 +0.025 -0.020"/><axis xyz="0 -1 0"/>
+    <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
+  </joint>
 </robot>
 """
+
 
 def _door_urdf(scene: dict) -> str:
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
     w = 0.50
+    # Door mass 3 kg, panel half-size (w/2, 0.03, hz+0.05)
+    m_door = 3.0
+    hz_full = hz + 0.05
+    hx, hy, hdoor = w / 2.0, 0.03, hz_full
+    Ixx = m_door * (4 * hy * hy + 4 * hdoor * hdoor) / 12.0
+    Iyy = m_door * (4 * hx * hx + 4 * hdoor * hdoor) / 12.0
+    Izz = m_door * (4 * hx * hx + 4 * hy * hy) / 12.0
+    inertial = (
+        f'<inertial>\n'
+        f'  <origin xyz="{hx:.4f} 0 {hz_full:.4f}"/>\n'
+        f'  <mass value="{m_door:.3f}"/>\n'
+        f'  <inertia ixx="{Ixx:.6f}" iyy="{Iyy:.6f}" izz="{Izz:.6f}" '
+        f'ixy="0.0" ixz="0.0" iyz="0.0"/>\n'
+        f'</inertial>'
+    )
     return f"""<?xml version="1.0" ?>
 <robot name="door-panel">
-  <link name="base"><visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual><collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision></link>
-  <link name="panel"><visual><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual><collision><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision></link>
-  <link name="handle"><visual><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry><material name="metal"><color rgba="0.6 0.6 0.65 1"/></material></visual><collision><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry></collision></link>
-  <joint name="door_hinge" type="revolute"><parent link="base"/><child link="panel"/><origin xyz="0 0 0"/><axis xyz="0 0 1"/><limit lower="0" upper="1.57" effort="100" velocity="10"/></joint>
-  <joint name="handle_rot" type="revolute"><parent link="panel"/><child link="handle"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/><limit lower="-0.5" upper="0.5" effort="10" velocity="5"/></joint>
+  <link name="base">
+    <visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual>
+    <collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision>
+    <inertial><mass value="0.001"/><inertia ixx="1e-9" iyy="1e-9" izz="1e-9" ixy="0" ixz="0" iyz="0"/></inertial>
+  </link>
+  <link name="panel">
+    <visual><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual>
+    <collision><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision>
+    {inertial}
+  </link>
+  <link name="handle">
+    <visual><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry><material name="metal"><color rgba="0.6 0.6 0.65 1"/></material></visual>
+    <collision><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry></collision>
+    {_mass_box(0.2, 0.015, 0.02, 0.015)}
+  </link>
+  <joint name="door_hinge" type="revolute">
+    <parent link="base"/><child link="panel"/>
+    <origin xyz="0 0 0"/><axis xyz="0 0 1"/>
+    <limit lower="0" upper="1.57" effort="100" velocity="10"/>
+  </joint>
+  <joint name="handle_rot" type="revolute">
+    <parent link="panel"/><child link="handle"/>
+    <origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
+  </joint>
 </robot>
 """
 
+
 class PhysicsServer:
     TIMESTEP = 0.002
+
     def __init__(self) -> None:
         import pybullet as p
         self._p = p
@@ -70,6 +206,9 @@ class PhysicsServer:
         self._p.connect(self._p.DIRECT)
         self._p.setGravity(0, 0, -9.81)
         self._p.setTimeStep(self.TIMESTEP)
+        # Enable contact reporting; default threshold is 0 but we also
+        # check explicitly via getContactPoints in the loop.
+        self._p.setRealTimeSimulation(0)
 
     def _build(self, scene: dict) -> None:
         p = self._p
@@ -77,19 +216,21 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Load door only
-        df = tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False)
-        df.write(_door_urdf(scene)); df.close()
+        # Door
+        df = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
+        df.write(_door_urdf(scene))
+        df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
-        # Load arm
-        af = tempfile.NamedTemporaryFile(mode='w', suffix='_arm.urdf', delete=False)
-        af.write(_robot_urdf()); af.close()
+        # Arm — load slightly above ground so base sits on the implicit floor
+        af = tempfile.NamedTemporaryFile(mode="w", suffix="_arm.urdf", delete=False)
+        af.write(_robot_urdf())
+        af.close()
         self._arm_uid = p.loadURDF(af.name, [0, 0, 0.05])
         Path(af.name).unlink(missing_ok=True)
 
-        # Record handle start pos
+        # Record handle start pos from scene params (handle is child of panel)
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
@@ -107,7 +248,7 @@ class PhysicsServer:
         n = p.getNumJoints(self._door_idx)
         for j in range(n):
             info = p.getJointInfo(self._door_idx, j)
-            if info[1].decode() == 'door_hinge':
+            if info[1].decode() == "door_hinge":
                 self._door_angle = p.getJointState(self._door_idx, j)[0]
                 return
         self._door_angle = 0.0
@@ -134,8 +275,15 @@ class PhysicsServer:
         self._update_door_angle()
 
     def _get_contact_force(self) -> float:
+        """Sum of normal contact forces between arm and door bodies."""
         contacts = self._p.getContactPoints()
-        return sum(abs(c[9]) for c in contacts)
+        total = 0.0
+        for c in contacts:
+            # c[1] = body_a, c[2] = body_b; we want contacts between arm and door
+            if (c[1] == self._arm_uid and c[2] == self._door_idx) or \
+               (c[1] == self._door_idx and c[2] == self._arm_uid):
+                total += abs(c[9])  # normal force
+        return total
 
     def apply_action(self, action: dict) -> None:
         for joint, value in action.items():
@@ -143,6 +291,7 @@ class PhysicsServer:
 
     def close(self) -> None:
         pass
+
 
 class PyBulletSimulator:
     ROBOT_ID = "door-arm-001"
@@ -227,7 +376,7 @@ class PyBulletSimulator:
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 3: grip
+        # Stage 3: grip — close fingers while checking for contact
         for i in range(1, STAGE_STEPS["grip"] + 1):
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
@@ -240,15 +389,16 @@ class PyBulletSimulator:
             sim._peak_force = max(sim._peak_force, force)
             if force > 0.0:
                 sim._contact_samples += 1
+                sim._hold_forces.append(force)
 
         force = sim._get_contact_force()
         if force < GRASP_FORCE_MIN:
             handle_state = "slipped"
             return make_result(False, "grasp_failed",
-                f"peak_force={sim._peak_force:.3f} N")
+                f"peak_force={sim._peak_force:.3f} N, samples={sim._contact_samples}")
         handle_state = "gripped"
 
-        # Stage 4: pull
+        # Stage 4: pull arm tip backward (negative x) to open door
         if pull_end:
             for i in range(1, STAGE_STEPS["pull"] + 1):
                 pose = blend(grip, pull_end, i / STAGE_STEPS["pull"])
@@ -269,5 +419,6 @@ class PyBulletSimulator:
 
         return make_result(True, "opened",
             f"door opened {sim._door_angle:.2f} rad ({sim._door_angle*180/3.14159:.1f} deg)")
+
 
 __all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
