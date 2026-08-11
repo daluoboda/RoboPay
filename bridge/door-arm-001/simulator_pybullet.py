@@ -376,11 +376,13 @@ class PyBulletSimulator:
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 3: grip
+        # Stage 3: grip — MuJoCo drives both slide joints with +grip;
+        # grip_r axis is (0,-1,0) so a positive value moves the right
+        # finger toward -y (mirroring MuJoCo exactly).
         for i in range(1, STAGE_STEPS["grip"] + 1):
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
-            sim._set_joint_state(sim._arm_uid, "grip_r", -aperture)
+            sim._set_joint_state(sim._arm_uid, "grip_r", aperture)
             sim._tick()
             if sim._steps >= sim._budget:
                 break
