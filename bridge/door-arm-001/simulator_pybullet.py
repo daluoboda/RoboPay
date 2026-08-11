@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import sys
 import time
+import tempfile
+import os
 
 import numpy as np
 
@@ -135,7 +137,13 @@ class PyBulletSimulator:
             p.connect(p.DIRECT)
             p.setGravity(0, 0, -9.81)
             p.setTimeStep(TIMESTEP)
-            self._uid = p.loadURDF(_robot_urdf(), [0, 0, 0])
+            # PyBullet loadURDF needs a file path, not an inline URDF string.
+            urdf_text = _robot_urdf()
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf",
+                                             delete=False) as tf:
+                tf.write(urdf_text)
+                self._urdf_path = tf.name
+            self._uid = p.loadURDF(self._urdf_path, [0, 0, 0])
             # Load door
             self._door_uid = p.createCollisionShape(p.GEOM_BOX, halfExtents=[DOOR_WIDTH/2, 0.03, 1.05])
             self._door_idx = p.createMultiBody(1, self._door_uid, basePosition=[scene["door_x"], scene["door_y"], 1.05])
