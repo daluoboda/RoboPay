@@ -1,0 +1,92 @@
+{
+  "schema": "robopay.metrics/v1",
+  "skill": "push",
+  "robot_id": "push-arm-001",
+  "skill_id": "push_object",
+  "generated_by": "real test execution + real on-chain evidence (no fabricated values)",
+  "onchain_settlement": {
+    "primary": {
+      "network": "base-sepolia",
+      "asset": "USDC",
+      "real_tx_count": 2,
+      "txs": [
+        "0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba",
+        "0x3d9cbff38cc74a836effaae040244b9c06b07b90dac774c8223cc480e296483e"
+      ],
+      "explorer_base": "https://sepolia.basescan.org/tx/",
+      "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      "payer": "0xA0723A2dA2bFa349919A467446Fb54569b2f3d13"
+    },
+    "auxiliary_pi": {
+      "network": null,
+      "real_tx_count": 0,
+      "txs": []
+    },
+    "note": "Primary proof = Base-Sepolia USDC txs. Pi-Network txs, when present, are a separate testnet and are NOT counted as the primary settlement proof."
+  },
+  "payment_gate": {
+    "unpaid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_unpaid_challenged"
+      ],
+      "failed_tests": []
+    },
+    "invalid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_params_hash_mismatch"
+      ],
+      "failed_tests": []
+    },
+    "expired_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_expired"
+      ],
+      "failed_tests": []
+    },
+    "replay_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_duplicate_no_rerun",
+        "test_idempotency_conflict",
+        "test_auth_replay"
+      ],
+      "failed_tests": []
+    },
+    "paid_success": {
+      "status": "PASS",
+      "note": "2 real Base-Sepolia USDC tx(s) recorded.",
+      "onchain_tx_count": 2,
+      "tests": [
+        "test_unpaid_challenged",
+        "test_valid_accepted_and_executes",
+        "test_txhash_format_validation",
+        "TestRealMuJoCoCorrelated::test_relay_real_push_failure_no_settle",
+        "TestRealMuJoCoCorrelated::test_relay_real_push_settles",
+        "TestPyBulletBackendContract::test_failures_never_report_success",
+        "TestPyBulletBackendContract::test_success_path_completes"
+      ]
+    },
+    "failure_no_settle": {
+      "status": "PASS",
+      "tests": [
+        "test_payment_gate_no_action_published",
+        "TestRealMuJoCoCorrelated::test_real_push_fails",
+        "TestRealMuJoCoCorrelated::test_relay_real_push_failure_no_settle",
+        "TestPyBulletBackendContract::test_collision_path_completes",
+        "TestPyBulletBackendContract::test_failures_never_report_success",
+        "TestPyBulletBackendContract::test_timeout_path_completes",
+        "TestPyBulletBackendContract::test_unreachable_path_completes"
+      ],
+      "failed_tests": []
+    }
+  },
+  "summary": {
+    "all_core_metrics_pass": true,
+    "real_onchain_txs": 2,
+    "ci_gated_dynamic_sim2sim": true,
+    "bridge_unit_test_present": true
+  }
+}
