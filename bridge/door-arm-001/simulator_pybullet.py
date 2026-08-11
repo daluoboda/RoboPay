@@ -89,14 +89,12 @@ class PhysicsServer:
         self._arm_uid = p.loadURDF(af.name, [0, 0, 0.05])
         Path(af.name).unlink(missing_ok=True)
 
-        # Record handle start pos
-        n = p.getNumJoints(self._door_idx)
-        for j in range(n):
-            info = p.getJointInfo(self._door_idx, j)
-            if info[1].decode() == 'handle_rot':
-                ls = p.getLinkState(self._door_idx, j + 1)
-                self._handle_start_pos = list(ls[0])
-                break
+        # Record handle start pos (compute from scene params since URDF link indices are tricky)
+        hz = scene.get("handle_z", 0.85)
+        dx = scene["door_x"]
+        w = 0.50
+        # Handle is at (dx + w - 0.05, 0, hz) in world coords when door=0
+        self._handle_start_pos = [dx + w - 0.05, 0.04, hz]
 
         self._steps = 0
         self._peak_force = 0.0
