@@ -333,5 +333,3 @@ class PyBulletSimulator:
 
 
 __all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
-
-# MARKER_V3_PROOF
