@@ -1,0 +1,47 @@
+{
+  "schema": "robopay.sim_to_sim_validation/v1",
+  "skill": "door",
+  "robot_id": "door-arm-001",
+  "skill_id": "open_door",
+  "engines": {
+    "engine_a": "mujoco",
+    "engine_b": "pybullet"
+  },
+  "method": "single skill definition executed on two independent physics backends; verdicts/reasons/metrics must agree",
+  "environment": {
+    "python": "3.13.14",
+    "mujoco": "3.11.0",
+    "pybullet": "stub-only (real wheel not installable on Windows; dynamic layer CI-gated)",
+    "host": "windows (dynamic cross-engine layer CI-gated)"
+  },
+  "layers": {
+    "static_spec_consistency": {
+      "status": "PASS",
+      "note": "Both backends generated from one robot spec; URDF/joint-chain/keyframes verified."
+    },
+    "pybullet_backend_contract": {
+      "status": "PASS",
+      "note": "PyBullet call surface + failure semantics verified (real PyBullet absent on Windows -> bullet_stub)."
+    },
+    "dynamic_engine_agreement": {
+      "status": "CI_GATED",
+      "note": "MuJoCo<->PyBullet numeric agreement runs only where real PyBullet is importable (Linux CI). Skipped on this Windows host; not faked.",
+      "skipped_tests": [
+        "[1] test_sim2sim.py:158: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:151: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:168: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:142: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:172: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:146: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:164: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:136: pybullet not importable (source-only wheel; runs in CI)"
+      ]
+    },
+    "runnable_layers": {
+      "passed": 10,
+      "skipped": 8,
+      "failed": 0
+    }
+  },
+  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_CI_GATED"
+}
