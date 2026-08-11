@@ -151,7 +151,7 @@ def _door_urdf(scene: dict) -> str:
   <joint name="hinge" type="revolute">
     <parent link="frame"/><child link="panel"/>
     <origin xyz="{dx} {dy} 0"/><axis xyz="0 0 1"/>
-    <limit lower="-1.57" upper="1.57" effort="100" velocity="10"/>
+    <limit lower="0" upper="1.57" effort="100" velocity="10"/>
   </joint>
 </robot>
 """
