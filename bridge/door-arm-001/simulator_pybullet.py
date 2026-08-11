@@ -1,25 +1,13 @@
-"""door-arm-001 --- PyBullet backend for the door-opening skill.
-
-Single source of truth: arm_spec.py owns the scene table, joint chain,
-kinematics, and pass/fail thresholds. This file only translates those
-into PyBullet calls. Falls back to bullet_stub.py when PyBullet is
-absent (Windows CI / import-only environments).
-"""
+"""door-arm-001 --- PyBullet backend for the door-opening skill."""
 from __future__ import annotations
 
-import sys
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
 
-# -----------------------------------------------------------------------
-# available() -- stub guard
-# -----------------------------------------------------------------------
-
 def available() -> bool:
-    """True only when a real PyBullet is importable (no bullet_stub)."""
     try:
         import pybullet as p
         if getattr(p, '__file__', '').endswith('bullet_stub.py'):
@@ -28,55 +16,29 @@ def available() -> bool:
     except Exception:
         return False
 
-
-# -----------------------------------------------------------------------
-# URDF helpers (public API for tests)
-# -----------------------------------------------------------------------
-
 def _robot_urdf() -> str:
-    """Return the canonical URDF string for the arm robot.
-
-    This is the single source of truth shared with MuJoCo's MJCF.
-    """
-    # BASE_H=0.80, LINK1=0.28, LINK2=0.24, GRIP_MID=0.065
     return """<?xml version="1.0" ?>
 <robot name="door-arm-001">
-  <!-- Base: cylinder on floor -->
   <link name="base"><visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual><collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision></link>
-
-  <!-- Column: rises from base top to pan joint (BASE_H - 0.35 = 0.45) -->
   <link name="column"><visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual><collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision></link>
   <joint name="pan" type="revolute"><parent link="base"/><child link="column"/><origin xyz="0 0 0.05"/><axis xyz="0 0 1"/><limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/></joint>
-
-  <!-- Upper arm: shoulder joint at column top (z=0.80), extends +x LINK1=0.28 -->
   <link name="upper"><visual><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual><collision><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision></link>
   <joint name="shoulder" type="revolute"><parent link="column"/><child link="upper"/><origin xyz="0 0 0.35"/><axis xyz="0 1 0"/><limit lower="-2.0" upper="2.0" effort="100" velocity="10"/></joint>
-
-  <!-- Forearm: elbow at upper.end (x=0.28, z=0.80), extends +x LINK2=0.24 -->
   <link name="fore"><visual><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual><collision><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision></link>
   <joint name="elbow" type="revolute"><parent link="upper"/><child link="fore"/><origin xyz="0.28 0 0"/><axis xyz="0 1 0"/><limit lower="-2.6" upper="2.6" effort="100" velocity="10"/></joint>
-
-  <!-- Wrist: at fore.end (x=0.52, z=0.80), small box -->
   <link name="wrist"><visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual><collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision></link>
   <joint name="wristp" type="revolute"><parent link="fore"/><child link="wrist"/><origin xyz="0.24 0 0"/><axis xyz="0 1 0"/><limit lower="-2.8" upper="2.8" effort="100" velocity="10"/></joint>
-
-  <!-- Fingers: gripped at wrist.z - GRIP_MID = 0.80 - 0.065 = 0.735 -->
   <link name="finger_l"><visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual><collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision></link>
   <joint name="grip_l" type="prismatic"><parent link="wrist"/><child link="finger_l"/><origin xyz="0 0 -0.065"/><axis xyz="0 1 0"/><limit lower="0.012" upper="0.060" effort="50" velocity="5"/></joint>
-
   <link name="finger_r"><visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual><collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision></link>
   <joint name="grip_r" type="prismatic"><parent link="wrist"/><child link="finger_r"/><origin xyz="0 0 -0.065"/><axis xyz="0 -1 0"/><limit lower="0.012" upper="0.060" effort="50" velocity="5"/></joint>
 </robot>
 """
 
-
 def _door_urdf(scene: dict) -> tuple[str, str]:
-    """Return (frame_urdf, door_urdf) strings."""
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
-    w = 0.50  # DOOR_WIDTH
-
-    # Frame: left jamb, right jamb, top header
+    w = 0.50
     frame = f"""<?xml version="1.0" ?>
 <robot name="door-frame">
   <link name="frame_l"><visual><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry></collision></link>
@@ -84,7 +46,6 @@ def _door_urdf(scene: dict) -> tuple[str, str]:
   <link name="frame_t"><visual><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry></collision></link>
 </robot>
 """
-    # Door: fixed base at hinge + revolute panel + handle on panel
     door = f"""<?xml version="1.0" ?>
 <robot name="door-panel">
   <link name="base"><visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual><collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision></link>
@@ -96,15 +57,8 @@ def _door_urdf(scene: dict) -> tuple[str, str]:
 """
     return frame, door
 
-
-# -----------------------------------------------------------------------
-# PhysicsServer
-# -----------------------------------------------------------------------
-
 class PhysicsServer:
-    """Thin wrapper around PyBullet Python API."""
     TIMESTEP = 0.002
-
     def __init__(self) -> None:
         import pybullet as p
         self._p = p
@@ -113,7 +67,6 @@ class PhysicsServer:
         self._door_idx: int = -1
         self._door_angle: float = 0.0
         self._handle_start_pos: list[float] = [0.0, 0.0, 0.0]
-        self._t0: float = 0.0
         self._peak_force: float = 0.0
         self._hold_forces: list[float] = []
         self._contact_samples: int = 0
@@ -132,33 +85,28 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Floor: use PyBullet's built-in ground plane (no URDF needed)
-        # p.loadPLANE() is deprecated; instead just rely on default ground
-        # which is enabled by default in DIRECT mode.
-
-        # Door frame
+        # Load frame
         frame_urdf_str, door_urdf_str = _door_urdf(scene)
         ff = tempfile.NamedTemporaryFile(mode='w', suffix='_frame.urdf', delete=False)
         ff.write(frame_urdf_str); ff.close()
         p.loadURDF(ff.name, [0, 0, 0])
         Path(ff.name).unlink(missing_ok=True)
 
-        # Door panel (base link at door_x, door_y)
+        # Load door
         df = tempfile.NamedTemporaryFile(mode='w', suffix='_door.urdf', delete=False)
         df.write(door_urdf_str); df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
-        # Arm robot
-        arm_path = tempfile.NamedTemporaryFile(mode='w', suffix='_arm.urdf', delete=False)
-        arm_path.write(_robot_urdf())
-        arm_path.close()
-        self._arm_uid = p.loadURDF(arm_path.name, [0, 0, 0.05])
-        Path(arm_path.name).unlink(missing_ok=True)
+        # Load arm
+        af = tempfile.NamedTemporaryFile(mode='w', suffix='_arm.urdf', delete=False)
+        af.write(_robot_urdf()); af.close()
+        self._arm_uid = p.loadURDF(af.name, [0, 0, 0.05])
+        Path(af.name).unlink(missing_ok=True)
 
-        # Record handle start position
-        n_door_joints = p.getJointCount(self._door_idx)
-        for j in range(n_door_joints):
+        # Record handle start pos
+        n = p.getJointCount(self._door_idx)
+        for j in range(n):
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'handle_rot':
                 ls = p.getLinkState(self._door_idx, j + 1)
@@ -173,14 +121,12 @@ class PhysicsServer:
         self._update_door_angle()
 
     def _update_door_angle(self) -> None:
-        """Read door_hinge joint angle from PyBullet state."""
         p = self._p
         n = p.getJointCount(self._door_idx)
         for j in range(n):
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'door_hinge':
-                state = p.getJointState(self._door_idx, j)
-                self._door_angle = state[0]
+                self._door_angle = p.getJointState(self._door_idx, j)[0]
                 return
         self._door_angle = 0.0
 
@@ -207,52 +153,22 @@ class PhysicsServer:
 
     def _get_contact_force(self) -> float:
         contacts = self._p.getContactPoints()
-        total = 0.0
-        for c in contacts:
-            total += abs(c[9])
-        return total
+        return sum(abs(c[9]) for c in contacts)
 
     def apply_action(self, action: dict) -> None:
         for joint, value in action.items():
             self._set_joint_state(self._arm_uid, joint, value)
 
-    def get_state(self) -> dict:
-        return {
-            "door_angle": self._door_angle,
-            "arm_positions": {
-                "pan": self._get_joint_state(self._arm_uid, "pan"),
-                "shoulder": self._get_joint_state(self._arm_uid, "shoulder"),
-                "elbow": self._get_joint_state(self._arm_uid, "elbow"),
-                "wristp": self._get_joint_state(self._arm_uid, "wristp"),
-            },
-            "grip": self._get_joint_state(self._arm_uid, "grip_l"),
-            "steps": self._steps,
-            "contact_force": self._get_contact_force(),
-        }
-
     def close(self) -> None:
-        if self._uid >= 0:
-            try:
-                self._p.disconnect()
-            except Exception:
-                pass
-            self._uid = -1
-
-
-# -----------------------------------------------------------------------
-# PyBulletSimulator (public class matching MuJoCoSimulator API)
-# -----------------------------------------------------------------------
+        pass  # PyBullet DIRECT mode manages lifecycle
 
 class PyBulletSimulator:
-    """Door-opening simulator; uses real PyBullet when available."""
-
     ROBOT_ID = "door-arm-001"
     SKILL_ID = "open_door"
     ENGINE = "pybullet"
 
     def __init__(self) -> None:
         self._sim: PhysicsServer | None = None
-        self._scene: dict = {}
 
     def _ensure_sim(self) -> PhysicsServer:
         if self._sim is None:
@@ -261,7 +177,6 @@ class PyBulletSimulator:
         return self._sim
 
     def open_door(self, params: dict | None = None) -> dict:
-        """Run one door-opening episode and return a result dict."""
         from arm_spec import (
             resolve_scene, build_metrics,
             OPEN_ANGLE_MIN, GRASP_FORCE_MIN,
@@ -269,7 +184,6 @@ class PyBulletSimulator:
             solve, DOOR_WIDTH,
         )
         name, key, scene = resolve_scene(params)
-        self._scene = scene
         sim = self._ensure_sim()
         sim._build(scene)
 
@@ -324,7 +238,7 @@ class PyBulletSimulator:
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 2: descend to handle
+        # Stage 2: descend
         if grip:
             for i in range(1, STAGE_STEPS["descend"] + 1):
                 pose = blend(above if above else {"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0},
@@ -335,7 +249,7 @@ class PyBulletSimulator:
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 3: grip handle
+        # Stage 3: grip
         for i in range(1, STAGE_STEPS["grip"] + 1):
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
@@ -344,7 +258,6 @@ class PyBulletSimulator:
                 sim._tick()
             if sim._steps >= sim._budget:
                 break
-
             force = sim._get_contact_force()
             sim._peak_force = max(sim._peak_force, force)
             if force > 0.0:
@@ -358,7 +271,7 @@ class PyBulletSimulator:
                         f"peak_force={sim._peak_force:.3f} N")}
         handle_state = "gripped"
 
-        # Stage 4: pull door open
+        # Stage 4: pull
         if pull_end:
             for i in range(1, STAGE_STEPS["pull"] + 1):
                 pose = blend(grip, pull_end, i / STAGE_STEPS["pull"])
@@ -381,11 +294,5 @@ class PyBulletSimulator:
         return {"success": True, "reason": "opened",
                 "metrics": report(True, "opened",
                     f"door opened {sim._door_angle:.2f} rad ({sim._door_angle*180/3.14159:.1f} deg)")}
-
-    def close(self) -> None:
-        if self._sim:
-            self._sim.close()
-            self._sim = None
-
 
 __all__ = ["PyBulletSimulator", "available", "_robot_urdf", "_door_urdf"]
