@@ -1,47 +1,19 @@
-claimBoundary:
-  live: Live x402 verify+settle on Base Sepolia (demo mode) and live MuJoCo physics
-    execution, both performed for this submission.
-  notClaimed: A publication video of the simulator motion is not included; the MuJoCo
-    result metrics are the authoritative execution evidence.
-evidence:
-- bytes: 54465
-  captureDate: '2026-08-10'
-  dimensionsPx: 1280x720
-  evidenceId: E-DOOR-001
-  file: terminal/door-arm-01.png
-  format: png
-  scope: live-x402-payment-challenge
-  sha256: ec1ebef5610db1bf2e6a9ca50b9aff5e276616da3d70d490e143201ecbf93a31
-- bytes: 66076
-  captureDate: '2026-08-10'
-  dimensionsPx: 1280x720
-  evidenceId: E-DOOR-002
-  file: terminal/door-arm-02.png
-  format: png
-  scope: live-pybullet-sim-to-sim-validation
-  sha256: 5cd9312a470a8113e40015e9544ac4f2d0ba8d99594ec2bf1027be33a5d2b63a
-- bytes: 66249
-  captureDate: '2026-08-10'
-  dimensionsPx: 1280x720
-  evidenceId: E-DOOR-003
-  file: terminal/door-arm-03.png
-  format: png
-  scope: live-stuck-scene-failure-no-settlement
-  sha256: 55bfdead668895ddd33b5030539b61e9828d5835f078ce9fb159301a63ec9282
-- bytes: 66510
-  captureDate: '2026-08-10'
-  dimensionsPx: 1280x720
-  evidenceId: E-DOOR-004
-  file: terminal/door-arm-04.png
-  format: png
-  scope: live-out-of-range-scene-failure-no-settlement
-  sha256: 9714c110ee27d35ee69e5cd792d3917e20469a0285d68bddb12fd30cdd072720
-- bytes: 43066
-  captureDate: '2026-08-10'
-  evidenceId: E-VIDEO-001
-  file: door-arm-demo.mp4
-  format: mp4
-  scope: live-simulator-video-compilation
-  sha256: 86d41890a5cc2c6e132a67bb45334193512a41e9cda88a4f2eed99f2e7def72c
-profileId: door-arm-001
-schemaVersion: robopay-evidence.v1
+schema: robopay.evidence_manifest/v1
+skill: door
+robot_id: door-arm-001
+skill_id: open_door
+generated: '2026-08-11T23:30:00+08:00'
+host: 104.168.103.106 (1C1G VPS, Linux, real pybullet)
+artifacts:
+- path: docs/evidence/sim2sim_linux_vps.png
+  sha256: 715479dab0d2ead8a7e322b9ee1c4bdae88fe121ebb974acf6bbb8861202c735
+  kind: pytest_log_render
+- path: docs/evidence/dynamic_override.json
+  sha256: b1966bbd56adac538713fabb31e737a95691c0d147758c1cf4d2b17340777e9b
+  kind: dynamic_agreement_result
+summary:
+  pytest: 12 passed, 6 skipped
+  dynamic_agreement: PASS (all TestSimToSimAgreement tests pass with real PyBullet)
+  open_delta: 0.022 rad (mujoco 0.529 vs pybullet 0.551; tolerance 0.05)
+  stuck: both engines insufficient_open/incomplete
+  out_of_range: both engines configuration_error/ungripped

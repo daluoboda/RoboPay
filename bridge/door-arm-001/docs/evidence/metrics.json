@@ -25,48 +25,90 @@
   },
   "payment_gate": {
     "unpaid_rejected": {
-      "status": "NOT_COVERED",
-      "tests": []
+      "status": "PASS",
+      "tests": [
+        "TestUnpaidRejected402::test_unpaid_is_402_no_execution",
+        "TestInvalidRejected::test_invalid_is_402_no_execution",
+        "TestExpiredRejected::test_expired_is_402_no_execution"
+      ],
+      "failed_tests": []
     },
     "invalid_rejected": {
       "status": "PASS",
       "tests": [
+        "TestInvalidRejected::test_invalid_is_402_no_execution",
+        "TestInvalidRejected::test_malformed_txhash_rejected",
+        "TestInvalidRejected::test_wrong_amount_rejected",
+        "TestInvalidRejected::test_wrong_asset_rejected",
         "TestSpecIsSingleSource::test_unknown_engine_is_rejected"
       ],
       "failed_tests": []
     },
     "expired_rejected": {
-      "status": "NOT_COVERED",
-      "tests": []
+      "status": "PASS",
+      "tests": [
+        "TestExpiredRejected::test_expired_is_402_no_execution",
+        "TestExpiredRejected::test_expired_rejected",
+        "TestExpiredRejected::test_future_expiry_still_valid"
+      ],
+      "failed_tests": []
     },
     "replay_rejected": {
-      "status": "NOT_COVERED",
-      "tests": []
+      "status": "PASS",
+      "tests": [
+        "TestReplayRejected409::test_replay_of_verified_payment_is_rejected_no_double_settle",
+        "TestReplayRejected409::test_replay_rejected"
+      ],
+      "failed_tests": []
     },
     "paid_success": {
-      "status": "PASS_ONCHAIN_ONLY",
+      "status": "FAIL",
       "note": "1 real Base-Sepolia USDC tx(s) recorded.",
       "onchain_tx_count": 1,
       "tests": [
+        "TestUnpaidRejected402::test_unpaid_is_402_no_execution",
+        "TestInvalidRejected::test_invalid_is_402_no_execution",
+        "TestInvalidRejected::test_malformed_txhash_rejected",
+        "TestInvalidRejected::test_wrong_amount_rejected",
+        "TestInvalidRejected::test_wrong_asset_rejected",
+        "TestExpiredRejected::test_future_expiry_still_valid",
+        "TestReplayRejected409::test_replay_of_verified_payment_is_rejected_no_double_settle",
+        "TestPaidSuccessSettle::test_valid_receipt_verifies",
+        "TestPaidSuccessSettle::test_verified_payment_executes_and_settles",
         "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
         "TestPyBulletBackendContract::test_success_path_completes"
       ]
     },
     "failure_no_settle": {
-      "status": "PASS",
+      "status": "FAIL",
       "tests": [
+        "TestUnpaidRejected402::test_unpaid_is_402_no_execution",
+        "TestInvalidRejected::test_invalid_is_402_no_execution",
+        "TestInvalidRejected::test_malformed_txhash_rejected",
+        "TestInvalidRejected::test_wrong_amount_rejected",
+        "TestInvalidRejected::test_wrong_asset_rejected",
+        "TestExpiredRejected::test_expired_is_402_no_execution",
+        "TestExpiredRejected::test_expired_rejected",
+        "TestExpiredRejected::test_future_expiry_still_valid",
+        "TestReplayRejected409::test_replay_of_verified_payment_is_rejected_no_double_settle",
+        "TestReplayRejected409::test_replay_rejected",
         "TestSpecIsSingleSource::test_unknown_engine_is_rejected",
         "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
         "TestPyBulletBackendContract::test_out_of_range_path_completes",
         "TestPyBulletBackendContract::test_stuck_path_completes"
       ],
-      "failed_tests": []
+      "failed_tests": [
+        "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
+        "TestPyBulletBackendContract::test_out_of_range_path_completes",
+        "TestPyBulletBackendContract::test_stuck_path_completes"
+      ]
     }
   },
   "summary": {
     "all_core_metrics_pass": false,
     "real_onchain_txs": 1,
-    "ci_gated_dynamic_sim2sim": true,
-    "bridge_unit_test_present": false
+    "dynamic_sim2sim_status": "PASS",
+    "dynamic_sim2sim_real_run": true,
+    "bridge_unit_test_present": true
   }
 }
