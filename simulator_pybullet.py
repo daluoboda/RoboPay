@@ -9,6 +9,8 @@ from __future__ import annotations
 import sys
 import time
 
+import numpy as np
+
 from arm_spec import (
     ARM_JOINTS, BASE_H, BudgetExhausted, DOOR_HANDLE_HEIGHT, DOOR_WIDTH,
     GRASP_FORCE_MIN, GRIP_MID, LINK1, LINK2, OPEN_ANGLE_MIN, TIMESTEP,
@@ -124,6 +126,8 @@ class PyBulletSimulator:
         self._collisions = 0
         self._pose = {"pan": 0.0, "shoulder": 0.0, "elbow": 0.0, "wristp": 0.0}
         self._grip = 0.050
+        self._scene_key = "open"
+        self._t0 = 0.0
 
     def _build(self, scene: dict):
         """Build scene using PyBullet or stub."""
@@ -200,6 +204,8 @@ class PyBulletSimulator:
         start = dict(self._pose)
         for i in range(1, n + 1):
             self._tick(blend(start, target, i / n), grip)
+            if self._collisions:
+                return False
         return True
 
     def _hold(self, n: int, grip: float, sample: bool = False):
@@ -229,10 +235,19 @@ class PyBulletSimulator:
         t0 = time.perf_counter()
         self._build(scene)
         self._budget = scene["budget"]
+        self._t0 = t0
+        self._scene_key = key
+        # Handle start position (world coords, used for objectDelta)
+        hz_init = scene.get("handle_z", DOOR_HANDLE_HEIGHT)
+        self._handle_start_pos = (
+            scene["door_x"] + DOOR_WIDTH,
+            scene["door_y"],
+            hz_init,
+        )
 
         hx = scene["door_x"] + DOOR_WIDTH - 0.05
         hy = scene["door_y"]
-        hz = DOOR_HANDLE_HEIGHT
+        hz = scene.get("handle_z", DOOR_HANDLE_HEIGHT)
 
         above = solve(hx, hz + 0.10 + GRIP_MID)
         grip = solve(hx, hz + GRIP_MID)
@@ -283,25 +298,32 @@ class PyBulletSimulator:
     def _success(self):
         hold = (sum(self._hold_forces) / len(self._hold_forces)
                 if self._hold_forces else 0.5)
+        handle_end = (
+            self._handle_start_pos[0] + DOOR_WIDTH * (1 - np.cos(self._door_angle)),
+            self._handle_start_pos[1] + DOOR_WIDTH * np.sin(self._door_angle),
+            self._handle_start_pos[2],
+        )
         metrics = build_metrics(
-            engine=ENGINE, obj="open", scene_key="open", stage="full",
-            handle_state="gripped", start_pos=(0, 0, 0), end_pos=(0.4, 0, 0),
+            engine=ENGINE, obj="open", scene_key=self._scene_key, stage="full",
+            handle_state="gripped", start_pos=self._handle_start_pos,
+            end_pos=handle_end,
             hold_force=hold, peak_force=self._peak_force,
             contact_samples=self._contact_samples,
             collisions=self._collisions, steps=self._steps,
-            budget=self._budget, wall_time=time.perf_counter() - 0.7,
+            budget=self._budget, wall_time=time.perf_counter() - self._t0,
             door_angle=max(self._door_angle, OPEN_ANGLE_MIN + 0.1), note="success")
         from arm_spec import DoorResult
         return DoorResult(True, "opened", metrics)
 
     def _fail(self, reason: str, note: str):
         metrics = build_metrics(
-            engine=ENGINE, obj="open", scene_key="open", stage="full",
-            handle_state="ungripped", start_pos=(0, 0, 0), end_pos=(0, 0, 0),
+            engine=ENGINE, obj="open", scene_key=self._scene_key, stage="full",
+            handle_state="ungripped", start_pos=self._handle_start_pos,
+            end_pos=self._handle_start_pos,
             hold_force=0.0, peak_force=self._peak_force,
             contact_samples=self._contact_samples,
             collisions=self._collisions, steps=self._steps,
-            budget=self._budget, wall_time=time.perf_counter() - 0.3,
+            budget=self._budget, wall_time=time.perf_counter() - self._t0,
             door_angle=self._door_angle, note=note)
         from arm_spec import DoorResult
         return DoorResult(False, reason, metrics)
