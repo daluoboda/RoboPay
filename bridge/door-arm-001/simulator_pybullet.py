@@ -1,10 +1,8 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Mirrors the MuJoCo MJCF kinematics exactly. Key design:
-- Arm base at (0,0,0), matching MuJoCo body "base".
-- Column joint at (0,0,0.05), column link centered at (0,0,0.45).
-- Shoulder at (0,0,0.80) world, matching MuJoCo.
-- Finger origins at y=±0.025 so inner edges can reach handle at y=0.04.
+Mirrors the MuJoCo MJCF kinematics exactly:
+- MuJoCo column center at z=0.45, upper arm at z=0.80 (shoulder = 0.80)
+- PyBullet: shoulder joint at z=0.80 in world, column visual at z=0.45
 """
 from __future__ import annotations
 
@@ -38,7 +36,7 @@ def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
 
 
 def _robot_urdf() -> str:
-    """Arm URDF matching MuJoCo MJCF kinematics exactly."""
+    """Arm URDF matching MuJoCo kinematics exactly."""
     m_base, m_col, m_up, m_fore, m_wr, m_fg = 2.0, 1.5, 1.0, 0.8, 0.3, 0.15
 
     return f"""<?xml version="1.0" ?>
@@ -49,10 +47,10 @@ def _robot_urdf() -> str:
     <collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision>
     {_mass_box(m_base, 0.07, 0.07, 0.025)}
   </link>
-  <!-- Column rises from base joint -->
+  <!-- Column: visual center at z=0.45, height=0.35, spans z=0.275 to z=0.625 -->
   <link name="column">
-    <visual><origin xyz="0 0 0.175"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
-    <collision><origin xyz="0 0 0.175"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
+    <visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
+    <collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
     {_mass_box(m_col, 0.035, 0.035, 0.175)}
   </link>
   <joint name="pan" type="revolute">
@@ -60,7 +58,7 @@ def _robot_urdf() -> str:
     <origin xyz="0 0 0.05"/><axis xyz="0 0 1"/>
     <limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/>
   </joint>
-  <!-- Upper arm at shoulder height 0.80 -->
+  <!-- Upper arm: visual center at z=0.80 (shoulder joint position), length=0.28 -->
   <link name="upper">
     <visual><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
     <collision><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
@@ -71,10 +69,10 @@ def _robot_urdf() -> str:
     <origin xyz="0 0 0.35"/><axis xyz="0 1 0"/>
     <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
   </joint>
-  <!-- Forearm -->
+  <!-- Forearm: visual center at z=0.80 (elbow at z=0.80), length=0.24 -->
   <link name="fore">
-    <visual><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
+    <visual><origin xyz="0 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
     {_mass_box(m_fore, 0.12, 0.026, 0.026)}
   </link>
   <joint name="elbow" type="revolute">
@@ -82,7 +80,7 @@ def _robot_urdf() -> str:
     <origin xyz="0.28 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.6" upper="2.6" effort="100" velocity="10"/>
   </joint>
-  <!-- Wrist -->
+  <!-- Wrist at z=0.80 -->
   <link name="wrist">
     <visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual>
     <collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision>
@@ -95,8 +93,8 @@ def _robot_urdf() -> str:
   </joint>
   <!-- Fingers: inner edges must reach handle at y=0.04 -->
   <link name="finger_l">
-    <visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
-    <collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
     {_mass_box(m_fg, 0.014, 0.008, 0.045)}
   </link>
   <joint name="grip_l" type="prismatic">
@@ -105,8 +103,8 @@ def _robot_urdf() -> str:
     <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
   </joint>
   <link name="finger_r">
-    <visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
-    <collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
     {_mass_box(m_fg, 0.014, 0.008, 0.045)}
   </link>
   <joint name="grip_r" type="prismatic">
