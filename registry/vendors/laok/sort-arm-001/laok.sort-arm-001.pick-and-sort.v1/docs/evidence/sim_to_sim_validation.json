@@ -1,0 +1,50 @@
+{
+  "schema": "robopay.sim_to_sim_validation/v1",
+  "skill": "sort",
+  "robot_id": "sort-arm-001",
+  "skill_id": "pick_and_sort",
+  "engines": {
+    "engine_a": "mujoco",
+    "engine_b": "pybullet"
+  },
+  "method": "single skill definition executed on two independent physics backends; verdicts/reasons/metrics must agree",
+  "environment": {
+    "python": "3.13.14",
+    "mujoco": "3.11.0",
+    "pybullet": "stub-only (real wheel not installable on Windows; dynamic layer CI-gated)",
+    "host": "windows (dynamic cross-engine layer CI-gated)"
+  },
+  "layers": {
+    "static_spec_consistency": {
+      "status": "PASS",
+      "note": "Both backends generated from one robot spec; URDF/joint-chain/keyframes verified."
+    },
+    "pybullet_backend_contract": {
+      "status": "PASS",
+      "note": "PyBullet call surface + failure semantics verified (real PyBullet absent on Windows -> bullet_stub)."
+    },
+    "dynamic_engine_agreement": {
+      "status": "CI_GATED",
+      "note": "MuJoCo<->PyBullet numeric agreement runs only where real PyBullet is importable (Linux CI). Skipped on this Windows host; not faked.",
+      "skipped_tests": [
+        "[1] test_sim2sim.py:367: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:349: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:382: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:324: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:387: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:360: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:330: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:378: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:337: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:373: pybullet not importable (source-only wheel; runs in CI)",
+        "[1] test_sim2sim.py:318: pybullet not importable (source-only wheel; runs in CI)"
+      ]
+    },
+    "runnable_layers": {
+      "passed": 25,
+      "skipped": 11,
+      "failed": 0
+    }
+  },
+  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_CI_GATED"
+}
