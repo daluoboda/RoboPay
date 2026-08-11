@@ -1,10 +1,10 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Mirrors the MuJoCo MJCF kinematics and control exactly:
-- base links fixed (useFixedBase=True) so bodies don't drift
-- arm joints held by position control every step (like MuJoCo's qpos write)
+Mirrors the MuJoCo MJCF kinematics and control:
+- base links fixed (useFixedBase=True)
+- arm joints driven by POSITION_CONTROL (PD) each step, like MuJoCo's
+  implicit position constraint; contact forces stay physical
 - finger origins at y=0 symmetric (like MuJoCo slide joints)
-- one physics step per trajectory phase step (MuJoCo is 1:1 too)
 """
 from __future__ import annotations
 
@@ -89,12 +89,6 @@ def _robot_urdf() -> str:
     <origin xyz="0.24 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
   </joint>
-  <!--
-    MuJoCo: finger_l body at (0,0,-GRIP_MID) with slide joint axis (0,1,0).
-    Finger geom half-extents (0.014, 0.008, 0.045).
-    PyBullet mirrors this: joint origin at (0,0,0) from wrist, finger visual
-    centered at (0,0,-GRIP_MID).  No y offset - symmetric like MuJoCo.
-  -->
   <link name="finger_l">
     <visual><origin xyz="0 0 {-GRIP_MID}"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
     <collision><origin xyz="0 0 {-GRIP_MID}"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
@@ -172,6 +166,10 @@ def _door_urdf(scene: dict) -> str:
 class PhysicsServer:
     TIMESTEP = 0.002
 
+    # PD gains for position control (N·m per rad / (N·s per rad/s))
+    KP = 0.8
+    KD = 0.05
+
     def __init__(self) -> None:
         import pybullet as p
         self._p = p
@@ -200,7 +198,6 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Door: fixed base so the frame cannot drift
         df = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
         df.write(_door_urdf(scene))
         df.close()
@@ -208,21 +205,20 @@ class PhysicsServer:
                                     useFixedBase=True)
         Path(df.name).unlink(missing_ok=True)
 
-        # Arm: fixed base so the column cannot fall over
         af = tempfile.NamedTemporaryFile(mode="w", suffix="_arm.urdf", delete=False)
         af.write(_robot_urdf())
         af.close()
         self._arm_uid = p.loadURDF(af.name, [0, 0, 0.0], useFixedBase=True)
         Path(af.name).unlink(missing_ok=True)
 
-        # Map joint names -> indices for the arm
         self._arm_joint_ids = {}
         n = p.getNumJoints(self._arm_uid)
         for j in range(n):
             info = p.getJointInfo(self._arm_uid, j)
             self._arm_joint_ids[info[1].decode()] = j
+            # Disable default velocity motor so PD takes over cleanly
+            p.setJointMotorControl2(self._arm_uid, j, p.VELOCITY_CONTROL, force=0.0)
 
-        # Handle start pos
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
@@ -247,7 +243,7 @@ class PhysicsServer:
         self._door_angle = 0.0
 
     def _set_joint_state(self, body_uid: int, joint_name: str, value: float) -> None:
-        """Record target; applied every tick (position control like MuJoCo)."""
+        """Record target; applied via PD every tick."""
         if body_uid == self._arm_uid and joint_name in self._arm_joint_ids:
             self._targets[joint_name] = float(value)
         else:
@@ -259,11 +255,19 @@ class PhysicsServer:
                     return
 
     def _enforce_targets(self) -> None:
-        """Hold arm joints at commanded positions, matching MuJoCo qpos write."""
+        """Drive arm joints toward targets with PD (position control)."""
+        p = self._p
         for name, value in self._targets.items():
             j = self._arm_joint_ids.get(name)
-            if j is not None:
-                self._p.resetJointState(self._arm_uid, j, value)
+            if j is None:
+                continue
+            p.setJointMotorControl2(
+                self._arm_uid, j, p.POSITION_CONTROL,
+                targetPosition=value,
+                force=20.0,
+                positionGain=self.KP,
+                velocityGain=self.KD,
+            )
 
     def _tick(self) -> None:
         self._p.stepSimulation()
@@ -348,7 +352,7 @@ class PyBulletSimulator:
         if above is None or grip is None or pull_end is None:
             return make_result(False, "configuration_error", "keyframes unsolvable")
 
-        # Stage 1: move above handle (1 step per phase step, like MuJoCo)
+        # Stage 1: move above handle
         if above:
             for i in range(1, STAGE_STEPS["move_above"] + 1):
                 pose = blend({"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0},
