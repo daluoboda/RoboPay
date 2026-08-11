@@ -92,14 +92,15 @@ def _door_urdf(scene: dict) -> tuple[str, str]:
   <link name="frame_t"><visual><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry></collision></link>
 </robot>
 """
-    # Door panel: hinged at left edge (dx, 0, 0), opens +z rotation (range 0..pi/2)
-    # Handle at (dx + w - 0.05, 0.04, hz)
+    # Door: fixed base at hinge + revolute panel + handle on panel
+    # Base link is at (dx, dy, 0) — the hinge axis. Panel rotates about it.
     door = f"""<?xml version="1.0" ?>
 <robot name="door-panel">
+  <link name="base"><visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual><collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision></link>
   <link name="panel"><visual><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual><collision><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision></link>
   <link name="handle"><visual><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry><material name="metal"><color rgba="0.6 0.6 0.65 1"/></material></visual><collision><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry></collision></link>
+  <joint name="door_hinge" type="revolute"><parent link="base"/><child link="panel"/><origin xyz="0 0 0"/><axis xyz="0 0 1"/><limit lower="0" upper="1.57" effort="100" velocity="10"/></joint>
   <joint name="handle_rot" type="revolute"><parent link="panel"/><child link="handle"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/><limit lower="-0.5" upper="0.5" effort="10" velocity="5"/></joint>
-  <joint name="door_hinge" type="revolute"><parent link="world"/><child link="panel"/><origin xyz="{dx} 0 0"/><axis xyz="0 0 1"/><limit lower="0" upper="1.57" effort="100" velocity="10"/></joint>
 </robot>
 """
     return frame, door
@@ -155,7 +156,7 @@ class PhysicsServer:
         # Door panel (hinged at left edge)
         df = tempfile.NamedTemporaryFile(mode='w', suffix='_door.urdf', delete=False)
         df.write(door_urdf_str); df.close()
-        self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
+        self._door_idx = p.loadURDF(df.name, [dx, dy, 0])  # base link at door_x, door_y
         Path(df.name).unlink(missing_ok=True)
 
         # Arm robot
