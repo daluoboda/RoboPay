@@ -218,6 +218,15 @@ class PhysicsServer:
             info = p.getJointInfo(self._arm_uid, j)
             self._arm_joint_ids[info[1].decode()] = j
 
+        # Door hinge must swing freely like MuJoCo's passive joint:
+        # PyBullet auto-creates a velocity motor (force = URDF effort) that
+        # locks the door; disable it so finger contact can swing the panel.
+        nd = p.getNumJoints(self._door_idx)
+        for j in range(nd):
+            info = p.getJointInfo(self._door_idx, j)
+            p.setJointMotorControl2(self._door_idx, j, p.VELOCITY_CONTROL,
+                                    targetVelocity=0.0, force=0.0)
+
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
