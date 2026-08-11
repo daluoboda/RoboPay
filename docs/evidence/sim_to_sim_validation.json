@@ -1,0 +1,62 @@
+{
+  "schema": "robopay.sim_to_sim_validation/v1",
+  "skill": "door",
+  "robot_id": "door-arm-001",
+  "skill_id": "open_door",
+  "engines": {
+    "engine_a": "mujoco",
+    "engine_b": "pybullet"
+  },
+  "method": "single skill definition executed on two independent physics backends; verdicts/reasons/metrics must agree",
+  "environment": {
+    "python": "3.13.14",
+    "mujoco": "3.11.0",
+    "pybullet": "stub-only (real wheel not installable on Windows; dynamic layer CI-gated)",
+    "host": "windows (dynamic cross-engine layer CI-gated)"
+  },
+  "layers": {
+    "static_spec_consistency": {
+      "status": "FAIL",
+      "note": "Both backends generated from one robot spec; URDF/joint-chain/keyframes verified."
+    },
+    "pybullet_backend_contract": {
+      "status": "FAIL",
+      "note": "PyBullet call surface + failure semantics verified (real PyBullet absent on Windows -> bullet_stub)."
+    },
+    "dynamic_engine_agreement": {
+      "status": "PASS",
+      "note": "Real MuJoCo<->PyBullet agreement produced on Linux VPS (104.168.103.106, Ubuntu 24.04, Python 3.12.3, real pybullet wheel). All 7 TestSimToSimAgreement tests PASS; verdicts/reasons/handleState/doorAngle/contactForce agree between engines.",
+      "evidence": {
+        "host": "104.168.103.106 (1C1G VPS, Linux)",
+        "python": "3.12.3",
+        "engines": {
+          "mujoco": "3.11.0",
+          "pybullet": "real (compiled Aug 11 2026)"
+        },
+        "pytest": "12 passed, 6 skipped (stub-only contract tests skip with real pybullet)",
+        "open": {
+          "mujoco_door_angle": 0.5289,
+          "pybullet_door_angle": 0.5511,
+          "agreement_delta": 0.0222,
+          "handle_state": "gripped/gripped"
+        },
+        "stuck": {
+          "mujoco": "insufficient_open",
+          "pybullet": "insufficient_open",
+          "handle_state": "incomplete/incomplete"
+        },
+        "out_of_range": {
+          "mujoco": "configuration_error",
+          "pybullet": "configuration_error",
+          "handle_state": "ungripped/ungripped"
+        }
+      }
+    },
+    "runnable_layers": {
+      "passed": 4,
+      "skipped": 8,
+      "failed": 6
+    }
+  },
+  "overall": "ALL_LAYERS_PASS"
+}
