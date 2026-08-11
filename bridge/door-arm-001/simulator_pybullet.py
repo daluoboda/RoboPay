@@ -1,10 +1,12 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Mirrors the MuJoCo MJCF kinematics and control:
-- base links fixed (useFixedBase=True)
-- arm joints driven by POSITION_CONTROL (PD) each step, like MuJoCo's
-  implicit position constraint; contact forces stay physical
-- finger origins at y=0 symmetric (like MuJoCo slide joints)
+Mirrors MuJoCo exactly:
+- Kinematics: same joint chain, same link offsets.
+- Collision isolation: in MuJoCo only the finger geoms (contype=4) touch the
+  handle (conaffinity=4); arm rods and door panel never collide.  PyBullet
+  gets the same isolation via setCollisionFilterGroupMask.
+- Control: arm joints are position-held every step (MuJoCo writes qpos each
+  step); the door swings free on its hinge.
 """
 from __future__ import annotations
 
@@ -166,10 +168,6 @@ def _door_urdf(scene: dict) -> str:
 class PhysicsServer:
     TIMESTEP = 0.002
 
-    # PD gains for position control (N·m per rad / (N·s per rad/s))
-    KP = 0.8
-    KD = 0.05
-
     def __init__(self) -> None:
         import pybullet as p
         self._p = p
@@ -216,8 +214,23 @@ class PhysicsServer:
         for j in range(n):
             info = p.getJointInfo(self._arm_uid, j)
             self._arm_joint_ids[info[1].decode()] = j
-            # Disable default velocity motor so PD takes over cleanly
-            p.setJointMotorControl2(self._arm_uid, j, p.VELOCITY_CONTROL, force=0.0)
+
+        # Collision isolation, mirroring MuJoCo contype/conaffinity:
+        #   MuJoCo: arm rods contype=16 conaffinity=8; door panel contype=2
+        #   conaffinity=13; handle contype=4 conaffinity=13; fingers
+        #   contype=4 conaffinity=11.  Only fingers (4) vs handle (4) meet.
+        # PyBullet: keep group=1 only on fingers, mask=2; handle group=2,
+        # mask=1; everything else group=0 mask=0.
+        for j in range(p.getNumJoints(self._arm_uid) + 1):
+            p.setCollisionFilterGroupMask(self._arm_uid, j, 0, 0)
+        for j in range(p.getNumJoints(self._door_idx) + 1):
+            p.setCollisionFilterGroupMask(self._door_idx, j, 0, 0)
+        fl = self._arm_joint_ids["grip_l"] + 1
+        fr = self._arm_joint_ids["grip_r"] + 1
+        p.setCollisionFilterGroupMask(self._arm_uid, fl, 1, 2)
+        p.setCollisionFilterGroupMask(self._arm_uid, fr, 1, 2)
+        hl = 2  # handle is child of joint[1] -> link index 2
+        p.setCollisionFilterGroupMask(self._door_idx, hl, 2, 1)
 
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
@@ -243,7 +256,7 @@ class PhysicsServer:
         self._door_angle = 0.0
 
     def _set_joint_state(self, body_uid: int, joint_name: str, value: float) -> None:
-        """Record target; applied via PD every tick."""
+        """Record arm target; applied every tick (MuJoCo-style qpos write)."""
         if body_uid == self._arm_uid and joint_name in self._arm_joint_ids:
             self._targets[joint_name] = float(value)
         else:
@@ -255,19 +268,10 @@ class PhysicsServer:
                     return
 
     def _enforce_targets(self) -> None:
-        """Drive arm joints toward targets with PD (position control)."""
-        p = self._p
         for name, value in self._targets.items():
             j = self._arm_joint_ids.get(name)
-            if j is None:
-                continue
-            p.setJointMotorControl2(
-                self._arm_uid, j, p.POSITION_CONTROL,
-                targetPosition=value,
-                force=20.0,
-                positionGain=self.KP,
-                velocityGain=self.KD,
-            )
+            if j is not None:
+                self._p.resetJointState(self._arm_uid, j, value)
 
     def _tick(self) -> None:
         self._p.stepSimulation()
