@@ -232,6 +232,20 @@ class PhysicsServer:
             p.setJointMotorControl2(self._door_idx, j, p.VELOCITY_CONTROL,
                                     targetVelocity=0.0, force=0.0)
 
+        # Collision isolation mirroring MuJoCo's contype/conaffinity:
+        # only the finger boxes touch the handle; arm rods and door panel
+        # never collide (panel collision shape exists only so PyBullet
+        # derives a realistic inertia for the door).
+        # Link indices verified from AABB: arm link 4 = finger_l,
+        # arm link 5 = finger_r, door link 1 = handle.
+        for j in range(p.getNumJoints(self._arm_uid) + 1):
+            p.setCollisionFilterGroupMask(self._arm_uid, j, 0, 0)
+        for j in range(p.getNumJoints(self._door_idx) + 1):
+            p.setCollisionFilterGroupMask(self._door_idx, j, 0, 0)
+        p.setCollisionFilterGroupMask(self._arm_uid, 4, 1, 2)
+        p.setCollisionFilterGroupMask(self._arm_uid, 5, 1, 2)
+        p.setCollisionFilterGroupMask(self._door_idx, 1, 2, 1)
+
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
