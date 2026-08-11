@@ -36,13 +36,6 @@ def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
 
 def _robot_urdf() -> str:
     """Arm URDF mirroring MuJoCo MJCF kinematics exactly."""
-    # MuJoCo kinematics:
-    # base at (0,0,0)
-    # column at (0,0,BASE_H-0.35)=(0,0,0.45)
-    # upper at (0,0,BASE_H)=(0,0,0.80)
-    # fore at (LINK1,0,BASE_H)=(0.28,0,0.80)
-    # wrist at (LINK1+LINK2,0,BASE_H)=(0.52,0,0.80)
-    # finger_l at (LINK1+LINK2,0,BASE_H-GRIP_MID)=(0.52,0,0.735)
     m_base, m_col, m_up, m_fore, m_wr, m_fg = 2.0, 1.5, 1.0, 0.8, 0.3, 0.15
 
     return f"""<?xml version="1.0" ?>
@@ -59,12 +52,12 @@ def _robot_urdf() -> str:
   </link>
   <joint name="pan" type="revolute">
     <parent link="base"/><child link="column"/>
-    <origin xyz="0 0 0.05"/><axis xyz="0 0 1"/>
+    <origin xyz="0 0 0.45"/><axis xyz="0 0 1"/>
     <limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/>
   </joint>
   <link name="upper">
-    <visual><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0.14 0 0.80"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
+    <visual><origin xyz="0 0 0.35"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0 0 0.35"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
     {_mass_box(m_up, 0.14, 0.03, 0.03)}
   </link>
   <joint name="shoulder" type="revolute">
@@ -73,8 +66,8 @@ def _robot_urdf() -> str:
     <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
   </joint>
   <link name="fore">
-    <visual><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0.12 0 0.80"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
+    <visual><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
     {_mass_box(m_fore, 0.12, 0.026, 0.026)}
   </link>
   <joint name="elbow" type="revolute">
