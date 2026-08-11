@@ -1,19 +1,13 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Key fixes for real-sim agreement:
-- All links carry mass + inertia so PyBullet treats them as dynamic bodies.
-- Finger origins shifted from y=±0.065 to y=±0.025 so the inner edges
-  can reach the handle at y=0.04 even with a 0.016 m box width.
-- Finger pad z-origin moved from -0.045 to -0.020 so the pad mid-point
-  coincides with the wrist when the arm targets the handle centre.
+Mirrors the MuJoCo MJCF kinematics exactly so both engines produce
+identical handle_start_pos, IK targets, and contact topology.
 """
 from __future__ import annotations
 
 import tempfile
 import time
 from pathlib import Path
-
-import numpy as np
 
 
 def available() -> bool:
@@ -26,10 +20,7 @@ def available() -> bool:
         return False
 
 
-# ------------------------------------------------------------------ URDFs ---
-
 def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
-    """Return <inertial> block for a box of half-size (hx,hy,hz) and mass m."""
     Ixx = m * (4 * hy * hy + 4 * hz * hz) / 12.0
     Iyy = m * (4 * hx * hx + 4 * hz * hz) / 12.0
     Izz = m * (4 * hx * hx + 4 * hy * hy) / 12.0
@@ -44,13 +35,15 @@ def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
 
 
 def _robot_urdf() -> str:
-    # Link masses (kg) — small robot, realistic but not too heavy
-    m_base = 2.0
-    m_col = 1.5
-    m_up = 1.0
-    m_fore = 0.8
-    m_wr = 0.3
-    m_fg = 0.15
+    """Arm URDF mirroring MuJoCo MJCF kinematics exactly."""
+    # MuJoCo kinematics:
+    # base at (0,0,0)
+    # column at (0,0,BASE_H-0.35)=(0,0,0.45)
+    # upper at (0,0,BASE_H)=(0,0,0.80)
+    # fore at (LINK1,0,BASE_H)=(0.28,0,0.80)
+    # wrist at (LINK1+LINK2,0,BASE_H)=(0.52,0,0.80)
+    # finger_l at (LINK1+LINK2,0,BASE_H-GRIP_MID)=(0.52,0,0.735)
+    m_base, m_col, m_up, m_fore, m_wr, m_fg = 2.0, 1.5, 1.0, 0.8, 0.3, 0.15
 
     return f"""<?xml version="1.0" ?>
 <robot name="door-arm-001">
@@ -99,30 +92,19 @@ def _robot_urdf() -> str:
     <origin xyz="0.24 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
   </joint>
-  <!--
-    Finger pad z-origin: -0.020  (was -0.045).
-    With wrist at handle_z, pad centre sits at handle_z  (was 6.5mm too low).
-  -->
   <link name="finger_l">
-    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
-    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    <visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
     {_mass_box(m_fg, 0.014, 0.008, 0.045)}
   </link>
-  <!--
-    Finger y-origin: -0.025  (was -0.065).
-    With box half-width 0.008 and joint max 0.060,
-    left finger inner edge reaches y ≈ -0.025+0.060-0.008 = +0.027
-    right finger inner edge reaches y ≈ +0.025-0.060+0.008 = -0.027
-    → gap when fully open ≈ 0.054 m; handle at y=0.04 sits inside.
-  -->
   <joint name="grip_l" type="prismatic">
     <parent link="wrist"/><child link="finger_l"/>
     <origin xyz="0 -0.025 -0.020"/><axis xyz="0 1 0"/>
     <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
   </joint>
   <link name="finger_r">
-    <visual><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
-    <collision><origin xyz="0 0 -0.020"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
+    <visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
+    <collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
     {_mass_box(m_fg, 0.014, 0.008, 0.045)}
   </link>
   <joint name="grip_r" type="prismatic">
@@ -135,12 +117,12 @@ def _robot_urdf() -> str:
 
 
 def _door_urdf(scene: dict) -> str:
+    """Door URDF mirroring MuJoCo MJCF kinematics."""
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
     w = 0.50
-    # Door mass 3 kg, panel half-size (w/2, 0.03, hz+0.05)
-    m_door = 3.0
     hz_full = hz + 0.05
+    m_door = 3.0
     hx, hy, hdoor = w / 2.0, 0.03, hz_full
     Ixx = m_door * (4 * hy * hy + 4 * hdoor * hdoor) / 12.0
     Iyy = m_door * (4 * hx * hx + 4 * hdoor * hdoor) / 12.0
@@ -206,9 +188,6 @@ class PhysicsServer:
         self._p.connect(self._p.DIRECT)
         self._p.setGravity(0, 0, -9.81)
         self._p.setTimeStep(self.TIMESTEP)
-        # Enable contact reporting; default threshold is 0 but we also
-        # check explicitly via getContactPoints in the loop.
-        self._p.setRealTimeSimulation(0)
 
     def _build(self, scene: dict) -> None:
         p = self._p
@@ -216,21 +195,22 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Door
+        # Door — base at (dx, dy, 0), matching MuJoCo body "door" pos
         df = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
         df.write(_door_urdf(scene))
         df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
-        # Arm — load slightly above ground so base sits on the implicit floor
+        # Arm — base at (0,0,0), matching MuJoCo body "base" pos
         af = tempfile.NamedTemporaryFile(mode="w", suffix="_arm.urdf", delete=False)
         af.write(_robot_urdf())
         af.close()
-        self._arm_uid = p.loadURDF(af.name, [0, 0, 0.05])
+        self._arm_uid = p.loadURDF(af.name, [0, 0, 0.0])
         Path(af.name).unlink(missing_ok=True)
 
-        # Record handle start pos from scene params (handle is child of panel)
+        # Handle start pos: mirror MuJoCo exactly
+        # MuJoCo: handle body pos = [DOOR_WIDTH - 0.05, 0.04, hz] = [0.45, 0.04, 0.85]
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
@@ -279,10 +259,9 @@ class PhysicsServer:
         contacts = self._p.getContactPoints()
         total = 0.0
         for c in contacts:
-            # c[1] = body_a, c[2] = body_b; we want contacts between arm and door
             if (c[1] == self._arm_uid and c[2] == self._door_idx) or \
                (c[1] == self._door_idx and c[2] == self._arm_uid):
-                total += abs(c[9])  # normal force
+                total += abs(c[9])
         return total
 
     def apply_action(self, action: dict) -> None:
@@ -368,15 +347,15 @@ class PyBulletSimulator:
         # Stage 2: descend
         if grip:
             for i in range(1, STAGE_STEPS["descend"] + 1):
-                pose = blend(above if above else {"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0},
-                             grip, i / STAGE_STEPS["descend"])
+                start = above if above else {"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0}
+                pose = blend(start, grip, i / STAGE_STEPS["descend"])
                 sim.apply_action(pose)
                 for _ in range(5):
                     sim._tick()
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 3: grip — close fingers while checking for contact
+        # Stage 3: grip
         for i in range(1, STAGE_STEPS["grip"] + 1):
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
@@ -395,10 +374,10 @@ class PyBulletSimulator:
         if force < GRASP_FORCE_MIN:
             handle_state = "slipped"
             return make_result(False, "grasp_failed",
-                f"peak_force={sim._peak_force:.3f} N, samples={sim._contact_samples}")
+                f"peak_force={sim._peak_force:.3f} N")
         handle_state = "gripped"
 
-        # Stage 4: pull arm tip backward (negative x) to open door
+        # Stage 4: pull
         if pull_end:
             for i in range(1, STAGE_STEPS["pull"] + 1):
                 pose = blend(grip, pull_end, i / STAGE_STEPS["pull"])
