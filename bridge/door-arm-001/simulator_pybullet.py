@@ -35,18 +35,11 @@ def _robot_urdf() -> str:
 </robot>
 """
 
-def _door_urdf(scene: dict) -> tuple[str, str]:
+def _door_urdf(scene: dict) -> str:
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
     w = 0.50
-    frame = f"""<?xml version="1.0" ?>
-<robot name="door-frame">
-  <link name="frame_l"><visual><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry></collision></link>
-  <link name="frame_r"><visual><origin xyz="{dx + w + 0.05} 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="{dx + w + 0.05} 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry></collision></link>
-  <link name="frame_t"><visual><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="{dx + w/2} 0 {hz + 0.15}"/><geometry><box size="{w + 0.10} 0.05 0.05"/></geometry></collision></link>
-</robot>
-"""
-    door = f"""<?xml version="1.0" ?>
+    return f"""<?xml version="1.0" ?>
 <robot name="door-panel">
   <link name="base"><visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual><collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision></link>
   <link name="panel"><visual><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual><collision><origin xyz="{w/2} 0 {hz + 0.05}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision></link>
@@ -55,7 +48,6 @@ def _door_urdf(scene: dict) -> tuple[str, str]:
   <joint name="handle_rot" type="revolute"><parent link="panel"/><child link="handle"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/><limit lower="-0.5" upper="0.5" effort="10" velocity="5"/></joint>
 </robot>
 """
-    return frame, door
 
 class PhysicsServer:
     TIMESTEP = 0.002
@@ -85,16 +77,9 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Load frame
-        frame_urdf_str, door_urdf_str = _door_urdf(scene)
-        ff = tempfile.NamedTemporaryFile(mode='w', suffix='_frame.urdf', delete=False)
-        ff.write(frame_urdf_str); ff.close()
-        p.loadURDF(ff.name, [0, 0, 0])
-        Path(ff.name).unlink(missing_ok=True)
-
-        # Load door
-        df = tempfile.NamedTemporaryFile(mode='w', suffix='_door.urdf', delete=False)
-        df.write(door_urdf_str); df.close()
+        # Load door only (no frame to avoid segfault)
+        df = tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False)
+        df.write(_door_urdf(scene)); df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
@@ -160,7 +145,7 @@ class PhysicsServer:
             self._set_joint_state(self._arm_uid, joint, value)
 
     def close(self) -> None:
-        pass  # PyBullet DIRECT mode manages lifecycle
+        pass
 
 class PyBulletSimulator:
     ROBOT_ID = "door-arm-001"
@@ -295,4 +280,4 @@ class PyBulletSimulator:
                 "metrics": report(True, "opened",
                     f"door opened {sim._door_angle:.2f} rad ({sim._door_angle*180/3.14159:.1f} deg)")}
 
-__all__ = ["PyBulletSimulator", "available", "_robot_urdf", "_door_urdf"]
+__all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
