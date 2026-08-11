@@ -147,6 +147,7 @@ def _door_urdf(scene: dict) -> str:
   </link>
   <link name="panel">
     <visual><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual>
+    <collision><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision>
     {inertial}
   </link>
   <link name="handle">
