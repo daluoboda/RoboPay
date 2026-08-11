@@ -132,10 +132,9 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Floor (if file exists)
-        floor_path = str(Path(__file__).parent / "floor.urdf")
-        if Path(floor_path).exists():
-            p.loadURDF(floor_path, [0, 0, -0.001])
+        # Floor: use PyBullet's built-in ground plane (no URDF needed)
+        # p.loadPLANE() is deprecated; instead just rely on default ground
+        # which is enabled by default in DIRECT mode.
 
         # Door frame
         frame_urdf_str, door_urdf_str = _door_urdf(scene)
