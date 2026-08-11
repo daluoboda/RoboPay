@@ -249,9 +249,8 @@ class PyBulletSimulator:
         force = sim._get_contact_force()
         if force < GRASP_FORCE_MIN:
             handle_state = "slipped"
-            return {"success": False, "reason": "grasp_failed",
-                    "metrics": report(False, "grasp_failed",
-                        f"peak_force={sim._peak_force:.3f} N")}
+            return make_result(False, "grasp_failed",
+                f"peak_force={sim._peak_force:.3f} N")
         handle_state = "gripped"
 
         # Stage 4: pull
@@ -270,12 +269,10 @@ class PyBulletSimulator:
 
         if sim._door_angle < OPEN_ANGLE_MIN:
             handle_state = "incomplete"
-            return {"success": False, "reason": "insufficient_open",
-                    "metrics": report(False, "insufficient_open",
-                        f"door opened {sim._door_angle:.2f} rad")}
+            return make_result(False, "insufficient_open",
+                f"door opened {sim._door_angle:.2f} rad")
 
-        return {"success": True, "reason": "opened",
-                "metrics": report(True, "opened",
-                    f"door opened {sim._door_angle:.2f} rad ({sim._door_angle*180/3.14159:.1f} deg)")}
+        return make_result(True, "opened",
+            f"door opened {sim._door_angle:.2f} rad ({sim._door_angle*180/3.14159:.1f} deg)")
 
 __all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
