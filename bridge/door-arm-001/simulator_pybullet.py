@@ -1,6 +1,9 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Mirrors the MuJoCo MJCF kinematics exactly.
+Mirrors the MuJoCo MJCF kinematics and control exactly:
+- base links fixed (useFixedBase=True) so bodies don't drift
+- arm joints held by position control every step (like MuJoCo's qpos write)
+- finger origins at y=0 symmetric (like MuJoCo slide joints)
 """
 from __future__ import annotations
 
@@ -86,12 +89,10 @@ def _robot_urdf() -> str:
     <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
   </joint>
   <!--
-    MuJoCo: finger body at pos="0 0 -{GRIP_MID}" = (0, 0, -0.065) from wrist.
-    Finger geom: box size="0.014 0.008 0.045" centered at finger body origin.
-    So finger collision spans z from -0.11 to -0.02 relative to wrist.
-    
-    PyBullet: joint origin at (0, 0, 0) from wrist, link visual/collision
-    centered at (0, 0, -{GRIP_MID}) from joint.
+    MuJoCo: finger_l body at (0,0,-GRIP_MID) with slide joint axis (0,1,0).
+    Finger geom half-extents (0.014, 0.008, 0.045).
+    PyBullet mirrors this: joint origin at (0,0,0) from wrist, finger visual
+    centered at (0,0,-GRIP_MID).  No y offset - symmetric like MuJoCo.
   -->
   <link name="finger_l">
     <visual><origin xyz="0 0 {-GRIP_MID}"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
@@ -100,7 +101,7 @@ def _robot_urdf() -> str:
   </link>
   <joint name="grip_l" type="prismatic">
     <parent link="wrist"/><child link="finger_l"/>
-    <origin xyz="0 -0.025 0"/><axis xyz="0 1 0"/>
+    <origin xyz="0 0 0"/><axis xyz="0 1 0"/>
     <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
   </joint>
   <link name="finger_r">
@@ -110,7 +111,7 @@ def _robot_urdf() -> str:
   </link>
   <joint name="grip_r" type="prismatic">
     <parent link="wrist"/><child link="finger_r"/>
-    <origin xyz="0 +0.025 0"/><axis xyz="0 -1 0"/>
+    <origin xyz="0 0 0"/><axis xyz="0 -1 0"/>
     <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
   </joint>
 </robot>
@@ -184,6 +185,8 @@ class PhysicsServer:
         self._collisions: int = 0
         self._steps: int = 0
         self._budget: int = 400
+        self._targets: dict = {}          # joint_name -> target value
+        self._arm_joint_ids: dict = {}    # joint_name -> joint index
 
     def connect(self) -> None:
         self._p.connect(self._p.DIRECT)
@@ -196,19 +199,27 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Door at (dx, dy, 0)
+        # Door: fixed base so the frame cannot drift
         df = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
         df.write(_door_urdf(scene))
         df.close()
-        self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
+        self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0],
+                                    useFixedBase=True)
         Path(df.name).unlink(missing_ok=True)
 
-        # Arm at (0,0,0)
+        # Arm: fixed base so the column cannot fall over
         af = tempfile.NamedTemporaryFile(mode="w", suffix="_arm.urdf", delete=False)
         af.write(_robot_urdf())
         af.close()
-        self._arm_uid = p.loadURDF(af.name, [0, 0, 0.0])
+        self._arm_uid = p.loadURDF(af.name, [0, 0, 0.0], useFixedBase=True)
         Path(af.name).unlink(missing_ok=True)
+
+        # Map joint names -> indices for the arm
+        self._arm_joint_ids = {}
+        n = p.getNumJoints(self._arm_uid)
+        for j in range(n):
+            info = p.getJointInfo(self._arm_uid, j)
+            self._arm_joint_ids[info[1].decode()] = j
 
         # Handle start pos
         hz = scene.get("handle_z", 0.85)
@@ -221,6 +232,7 @@ class PhysicsServer:
         self._hold_forces = []
         self._contact_samples = 0
         self._collisions = 0
+        self._targets = {}
         self._update_door_angle()
 
     def _update_door_angle(self) -> None:
@@ -233,24 +245,28 @@ class PhysicsServer:
                 return
         self._door_angle = 0.0
 
-    def _get_joint_state(self, body_uid: int, joint_name: str) -> float:
-        n = self._p.getNumJoints(body_uid)
-        for j in range(n):
-            info = self._p.getJointInfo(body_uid, j)
-            if info[1].decode() == joint_name:
-                return self._p.getJointState(body_uid, j)[0]
-        return 0.0
-
     def _set_joint_state(self, body_uid: int, joint_name: str, value: float) -> None:
-        n = self._p.getNumJoints(body_uid)
-        for j in range(n):
-            info = self._p.getJointInfo(body_uid, j)
-            if info[1].decode() == joint_name:
-                self._p.resetJointState(body_uid, j, value)
-                return
+        """Record target; applied every tick (position control like MuJoCo)."""
+        if body_uid == self._arm_uid and joint_name in self._arm_joint_ids:
+            self._targets[joint_name] = float(value)
+        else:
+            n = self._p.getNumJoints(body_uid)
+            for j in range(n):
+                info = self._p.getJointInfo(body_uid, j)
+                if info[1].decode() == joint_name:
+                    self._p.resetJointState(body_uid, j, value)
+                    return
+
+    def _enforce_targets(self) -> None:
+        """Hold arm joints at commanded positions, matching MuJoCo qpos write."""
+        for name, value in self._targets.items():
+            j = self._arm_joint_ids.get(name)
+            if j is not None:
+                self._p.resetJointState(self._arm_uid, j, value)
 
     def _tick(self) -> None:
         self._p.stepSimulation()
+        self._enforce_targets()
         self._steps += 1
         self._update_door_angle()
 
