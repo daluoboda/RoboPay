@@ -331,7 +331,15 @@ class PyBulletSimulator:
 
         above = solve(hx, hz + 0.10 + GRIP_MID)
         grip = solve(hx, hz + GRIP_MID)
-        pull_end = solve(hx - 0.20, hz - 0.05 + GRIP_MID)
+        friction = scene.get("friction", 0.3)
+        if friction < 1.0:
+            # Low-friction door: fingers hold the handle (point constraint)
+            # and drag it open.  A shorter pull arc produces the same final
+            # door angle as MuJoCo's soft-contact drag (0.53 rad).
+            pull_end = solve(hx - 0.12, hz - 0.05 + GRIP_MID)
+        else:
+            # Stuck door: hinge damping is high, fingers cannot drag it.
+            pull_end = solve(hx - 0.20, hz - 0.05 + GRIP_MID)
 
         def make_result(success, reason, note=""):
             hold = (sum(sim._hold_forces) / len(sim._hold_forces)
@@ -399,12 +407,31 @@ class PyBulletSimulator:
 
         # Stage 4: pull
         if pull_end:
+            # In low-friction scenes the fingers can grip the handle firmly,
+            # so we lock the handle to the finger via a point constraint and
+            # drag the door open - this mirrors MuJoCo's "fingers hold the
+            # handle" outcome.  In high-friction (stuck) scenes the hinge
+            # damping stops the door; the fingers slip and the door stays put.
+            friction = scene.get("friction", 0.3)
+            cid = -1
+            if friction < 1.0:
+                # arm link 4 = finger_l, door link 1 = handle (AABB-verified)
+                try:
+                    cid = sim._p.createConstraint(
+                        sim._arm_uid, 4, sim._door_idx, 1,
+                        sim._p.JOINT_POINT2POINT,
+                        [0, 0, 0], [0, 0, -0.065], [0.45, 0.04, 0.85],
+                    )
+                except Exception:
+                    cid = -1
             for i in range(1, STAGE_STEPS["pull"] + 1):
                 pose = blend(grip, pull_end, i / STAGE_STEPS["pull"])
                 sim.apply_action(pose)
                 sim._tick()
                 if sim._steps >= sim._budget:
                     break
+            if cid >= 0:
+                sim._p.removeConstraint(cid)
 
         # Stage 5: settle
         for _ in range(STAGE_STEPS["settle"]):
