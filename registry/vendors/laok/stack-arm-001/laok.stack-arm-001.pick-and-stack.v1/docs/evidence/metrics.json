@@ -1,0 +1,96 @@
+{
+  "schema": "robopay.metrics/v1",
+  "skill": "stack",
+  "robot_id": "stack-arm-001",
+  "skill_id": "pick_and_stack",
+  "generated_by": "real test execution + real on-chain evidence (no fabricated values)",
+  "onchain_settlement": {
+    "primary": {
+      "network": "base-sepolia",
+      "asset": "USDC",
+      "real_tx_count": 3,
+      "txs": [
+        "0xad4c5669e1a3351a69256e5c5d507efc939ed9e7cfe0ac8b0be90603a796d1d6",
+        "0x4e7db1219898a98187227c4673505f4af61fe22c6a783ad03d8ad9dbe136e80d",
+        "0x23439362ac5bf96f57296220c3d143e5442c18f08448c84fa6ca1e69d4e5137b"
+      ],
+      "explorer_base": "https://sepolia.basescan.org/tx/",
+      "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      "payer": "0xA0723A2dA2bFa349919A467446Fb54569b2f3d13"
+    },
+    "auxiliary_pi": {
+      "network": "pi-testnet",
+      "real_tx_count": 1,
+      "txs": [
+        "01f2a70e60f15086a5aeb1f85a1e7dc53ce24d84c65845efd749c6f1845d3e7e"
+      ]
+    },
+    "note": "Primary proof = Base-Sepolia USDC txs. Pi-Network txs, when present, are a separate testnet and are NOT counted as the primary settlement proof."
+  },
+  "payment_gate": {
+    "unpaid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_unpaid_challenged"
+      ],
+      "failed_tests": []
+    },
+    "invalid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_params_hash_mismatch"
+      ],
+      "failed_tests": []
+    },
+    "expired_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_expired"
+      ],
+      "failed_tests": []
+    },
+    "replay_rejected": {
+      "status": "PASS",
+      "tests": [
+        "test_duplicate_no_rerun",
+        "test_idempotency_conflict",
+        "test_auth_replay"
+      ],
+      "failed_tests": []
+    },
+    "paid_success": {
+      "status": "PASS",
+      "note": "3 real Base-Sepolia USDC tx(s) recorded.",
+      "onchain_tx_count": 3,
+      "tests": [
+        "test_unpaid_challenged",
+        "test_valid_accepted_and_executes",
+        "test_txhash_format_validation",
+        "test_pi_payment_accepted",
+        "TestRealMuJoCoCorrelated::test_relay_real_stack_failure_no_settle",
+        "TestRealMuJoCoCorrelated::test_relay_real_stack_settles",
+        "TestPyBulletBackendContract::test_failures_never_report_success",
+        "TestPyBulletBackendContract::test_success_path_completes"
+      ]
+    },
+    "failure_no_settle": {
+      "status": "PASS",
+      "tests": [
+        "test_payment_gate_no_action_published",
+        "TestRealMuJoCoCorrelated::test_real_stack_fails",
+        "TestRealMuJoCoCorrelated::test_relay_real_stack_failure_no_settle",
+        "TestPyBulletBackendContract::test_collision_path_completes",
+        "TestPyBulletBackendContract::test_failures_never_report_success",
+        "TestPyBulletBackendContract::test_timeout_path_completes",
+        "TestPyBulletBackendContract::test_unreachable_path_completes"
+      ],
+      "failed_tests": []
+    }
+  },
+  "summary": {
+    "all_core_metrics_pass": true,
+    "real_onchain_txs": 3,
+    "ci_gated_dynamic_sim2sim": true,
+    "bridge_unit_test_present": true
+  }
+}
