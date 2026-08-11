@@ -1,12 +1,12 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
 Mirrors MuJoCo exactly:
-- Kinematics: same joint chain, same link offsets.
-- Collision isolation: in MuJoCo only the finger geoms (contype=4) touch the
-  handle (conaffinity=4); arm rods and door panel never collide.  PyBullet
-  gets the same isolation via setCollisionFilterGroupMask.
-- Control: arm joints are position-held every step (MuJoCo writes qpos each
-  step); the door swings free on its hinge.
+- Kinematics: same joint chain, same link offsets (shoulder at z=0.80).
+- Collision isolation via URDF: only the finger boxes and the door handle
+  carry <collision> geometry; every other link is visual-only.  This mirrors
+  MuJoCo's contype/conaffinity where only fingers touch the handle.
+- Control: arm joints are position-held every step (MuJoCo writes qpos);
+  the door swings free on its hinge; only fingers contact the handle.
 """
 from __future__ import annotations
 
@@ -40,7 +40,11 @@ def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
 
 
 def _robot_urdf() -> str:
-    """Arm URDF matching MuJoCo MJCF kinematics exactly."""
+    """Arm URDF matching MuJoCo MJCF kinematics exactly.
+
+    Only the two finger links have <collision>; the rest are visual-only,
+    exactly like MuJoCo's contype=16 (arm rods never touch the door).
+    """
     m_base, m_col, m_up, m_fore, m_wr, m_fg = 2.0, 1.5, 1.0, 0.8, 0.3, 0.15
     GRIP_MID = 0.065
 
@@ -48,12 +52,10 @@ def _robot_urdf() -> str:
 <robot name="door-arm-001">
   <link name="base">
     <visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual>
-    <collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision>
     {_mass_box(m_base, 0.07, 0.07, 0.025)}
   </link>
   <link name="column">
     <visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
-    <collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
     {_mass_box(m_col, 0.035, 0.035, 0.175)}
   </link>
   <joint name="pan" type="revolute">
@@ -63,7 +65,6 @@ def _robot_urdf() -> str:
   </joint>
   <link name="upper">
     <visual><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
     {_mass_box(m_up, 0.14, 0.03, 0.03)}
   </link>
   <joint name="shoulder" type="revolute">
@@ -73,7 +74,6 @@ def _robot_urdf() -> str:
   </joint>
   <link name="fore">
     <visual><origin xyz="0 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
     {_mass_box(m_fore, 0.12, 0.026, 0.026)}
   </link>
   <joint name="elbow" type="revolute">
@@ -83,7 +83,6 @@ def _robot_urdf() -> str:
   </joint>
   <link name="wrist">
     <visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual>
-    <collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision>
     {_mass_box(m_wr, 0.032, 0.030, 0.018)}
   </link>
   <joint name="wristp" type="revolute">
@@ -91,6 +90,7 @@ def _robot_urdf() -> str:
     <origin xyz="0.24 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
   </joint>
+  <!-- Only fingers carry collision, like MuJoCo finger contype=4 -->
   <link name="finger_l">
     <visual><origin xyz="0 0 {-GRIP_MID}"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
     <collision><origin xyz="0 0 {-GRIP_MID}"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
@@ -116,7 +116,11 @@ def _robot_urdf() -> str:
 
 
 def _door_urdf(scene: dict) -> str:
-    """Door URDF mirroring MuJoCo MJCF kinematics."""
+    """Door URDF mirroring MuJoCo MJCF kinematics.
+
+    Only the handle carries <collision>; panel/frame are visual-only
+    (MuJoCo door contype=2 never collides with the arm).
+    """
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
     w = 0.50
@@ -138,12 +142,10 @@ def _door_urdf(scene: dict) -> str:
 <robot name="door-panel">
   <link name="base">
     <visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual>
-    <collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision>
     <inertial><mass value="0.001"/><inertia ixx="1e-9" iyy="1e-9" izz="1e-9" ixy="0" ixz="0" iyz="0"/></inertial>
   </link>
   <link name="panel">
     <visual><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry><material name="wood"><color rgba="0.85 0.65 0.35 1"/></material></visual>
-    <collision><origin xyz="{w/2} 0 {hz_full}"/><geometry><box size="{w} 0.06 {hz*2 + 0.10}"/></geometry></collision>
     {inertial}
   </link>
   <link name="handle">
@@ -214,23 +216,6 @@ class PhysicsServer:
         for j in range(n):
             info = p.getJointInfo(self._arm_uid, j)
             self._arm_joint_ids[info[1].decode()] = j
-
-        # Collision isolation, mirroring MuJoCo contype/conaffinity:
-        #   MuJoCo: arm rods contype=16 conaffinity=8; door panel contype=2
-        #   conaffinity=13; handle contype=4 conaffinity=13; fingers
-        #   contype=4 conaffinity=11.  Only fingers (4) vs handle (4) meet.
-        # PyBullet: keep group=1 only on fingers, mask=2; handle group=2,
-        # mask=1; everything else group=0 mask=0.
-        for j in range(p.getNumJoints(self._arm_uid) + 1):
-            p.setCollisionFilterGroupMask(self._arm_uid, j, 0, 0)
-        for j in range(p.getNumJoints(self._door_idx) + 1):
-            p.setCollisionFilterGroupMask(self._door_idx, j, 0, 0)
-        fl = self._arm_joint_ids["grip_l"] + 1
-        fr = self._arm_joint_ids["grip_r"] + 1
-        p.setCollisionFilterGroupMask(self._arm_uid, fl, 1, 2)
-        p.setCollisionFilterGroupMask(self._arm_uid, fr, 1, 2)
-        hl = 2  # handle is child of joint[1] -> link index 2
-        p.setCollisionFilterGroupMask(self._door_idx, hl, 2, 1)
 
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
@@ -376,9 +361,7 @@ class PyBulletSimulator:
                 if sim._steps >= sim._budget:
                     break
 
-        # Stage 3: grip — MuJoCo drives both slide joints with +grip;
-        # grip_r axis is (0,-1,0) so a positive value moves the right
-        # finger toward -y (mirroring MuJoCo exactly).
+        # Stage 3: grip
         for i in range(1, STAGE_STEPS["grip"] + 1):
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
