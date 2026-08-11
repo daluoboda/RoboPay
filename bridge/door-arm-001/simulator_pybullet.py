@@ -68,7 +68,7 @@ def _robot_urdf() -> str:
   </link>
   <joint name="shoulder" type="revolute">
     <parent link="column"/><child link="upper"/>
-    <origin xyz="0 0 0.35"/><axis xyz="0 1 0"/>
+    <origin xyz="0 0 0.75"/><axis xyz="0 1 0"/>
     <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
   </joint>
   <link name="fore">
