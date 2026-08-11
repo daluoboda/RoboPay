@@ -1,8 +1,10 @@
-"""door-arm-001 --- PyBullet backend stub (sim-to-sim).
+"""door-arm-001 --- PyBullet backend for sim-to-sim.
 
-This module provides a PyBullet-compatible interface for sim-to-sim testing.
-On Windows without PyBullet installed, the tests that require it are skipped.
-The stub records all calls for verification.
+Single source of truth shared with the MuJoCo backend (arm_spec). On a host
+with the real PyBullet wheel importable, open_door() runs a genuine Bullet
+simulation; otherwise it falls back to the deterministic bullet_stub so the
+static / contract tests still run. The cross-engine numeric agreement test
+(TestSimToSimAgreement) requires the real wheel and is skipped without it.
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ import numpy as np
 from arm_spec import (
     ARM_JOINTS, BASE_H, BudgetExhausted, DOOR_HANDLE_HEIGHT, DOOR_WIDTH,
     GRASP_FORCE_MIN, GRIP_MID, LINK1, LINK2, OPEN_ANGLE_MIN, TIMESTEP,
-    aperture_at, blend, build_metrics, resolve_scene,
+    aperture_at, blend, build_metrics, resolve_scene, DoorResult,
 )
 
 ENGINE = "pybullet"
@@ -42,36 +44,48 @@ G_ARM, M_ARM = 8, 8
 
 
 def _robot_urdf() -> str:
-    """URDF for door-arm-001."""
+    """URDF for door-arm-001.
+
+    Kinematics mirror the MuJoCo backend (shoulder pivot at BASE_H = 0.80 m,
+    link lengths LINK1/LINK2) so that the two engines agree on reach and on
+    where the gripper meets the handle.
+    """
     return f"""<?xml version="1.0"?>
 <robot name="door-arm-001">
   <link name="base">
     <visual><geometry><cylinder radius="0.07" length="0.05"/></geometry><origin rpy="0 0 0" xyz="0 0 0.025"/></visual>
     <collision><geometry><cylinder radius="0.07" length="0.05"/></geometry><origin rpy="0 0 0" xyz="0 0 0.025"/></collision>
+    <inertial><mass value="1"/><inertia ixx="0.01" iyy="0.01" izz="0.01"/></inertial>
   </link>
   <link name="column">
-    <visual><geometry><cylinder radius="0.035" length="0.35"/></geometry><origin rpy="0 0 0" xyz="0 0 0.175"/></visual>
-    <collision><geometry><cylinder radius="0.035" length="0.35"/></geometry><origin rpy="0 0 0" xyz="0 0 0.175"/></collision>
+    <visual><geometry><cylinder radius="0.035" length="0.75"/></geometry><origin rpy="0 0 0" xyz="0 0 0.375"/></visual>
+    <collision><geometry><cylinder radius="0.035" length="0.75"/></geometry><origin rpy="0 0 0" xyz="0 0 0.375"/></collision>
+    <inertial><mass value="0.5"/><inertia ixx="0.01" iyy="0.01" izz="0.01"/></inertial>
   </link>
   <link name="upper">
     <visual><geometry><cylinder radius="0.03" length="{LINK1}"/></geometry><origin rpy="0 1.5708 0" xyz="{LINK1/2} 0 0"/></visual>
     <collision><geometry><cylinder radius="0.03" length="{LINK1}"/></geometry><origin rpy="0 1.5708 0" xyz="{LINK1/2} 0 0"/></collision>
+    <inertial><mass value="0.3"/><inertia ixx="0.01" iyy="0.01" izz="0.01"/></inertial>
   </link>
   <link name="fore">
     <visual><geometry><cylinder radius="0.026" length="{LINK2}"/></geometry><origin rpy="0 1.5708 0" xyz="{LINK2/2} 0 0"/></visual>
     <collision><geometry><cylinder radius="0.026" length="{LINK2}"/></geometry><origin rpy="0 1.5708 0" xyz="{LINK2/2} 0 0"/></collision>
+    <inertial><mass value="0.2"/><inertia ixx="0.01" iyy="0.01" izz="0.01"/></inertial>
   </link>
   <link name="wrist">
     <visual><geometry><box size="0.064 0.06 0.036"/></geometry></visual>
     <collision><geometry><box size="0.064 0.06 0.036"/></geometry></collision>
+    <inertial><mass value="0.2"/><inertia ixx="0.01" iyy="0.01" izz="0.01"/></inertial>
   </link>
   <link name="finger_l">
     <visual><geometry><box size="0.028 0.016 0.09"/></geometry></visual>
     <collision><geometry><box size="0.028 0.016 0.09"/></geometry></collision>
+    <inertial><mass value="0.05"/><inertia ixx="0.001" iyy="0.001" izz="0.001"/></inertial>
   </link>
   <link name="finger_r">
     <visual><geometry><box size="0.028 0.016 0.09"/></geometry></visual>
     <collision><geometry><box size="0.028 0.016 0.09"/></geometry></collision>
+    <inertial><mass value="0.05"/><inertia ixx="0.001" iyy="0.001" izz="0.001"/></inertial>
   </link>
 
   <joint name="pan" type="revolute">
@@ -81,7 +95,7 @@ def _robot_urdf() -> str:
   </joint>
   <joint name="shoulder" type="revolute">
     <parent link="column"/><child link="upper"/>
-    <origin xyz="0 0 0.35"/><axis xyz="0 1 0"/>
+    <origin xyz="0 0 0.75"/><axis xyz="0 1 0"/>
     <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
   </joint>
   <joint name="elbow" type="revolute">
@@ -103,6 +117,41 @@ def _robot_urdf() -> str:
     <parent link="wrist"/><child link="finger_r"/>
     <origin xyz="0 0 -{GRIP_MID}"/><axis xyz="0 -1 0"/>
     <limit lower="0.012" upper="0.060" effort="50" velocity="5"/>
+  </joint>
+</robot>
+"""
+
+
+def _door_urdf(scene: dict) -> str:
+    """Door as a URDF with a built-in revolute hinge about the vertical axis.
+
+    Mirrors the MuJoCo door_hinge: hinge at the door's left edge (door_x,0,0),
+    axis 0 0 1, panel extending +x to door_x+DOOR_WIDTH. Hinge damping is set
+    from the scene friction so the "stuck" case (high friction) resists
+    opening the same way it does in MuJoCo.
+    """
+    dx, dy = scene["door_x"], scene["door_y"]
+    friction = scene.get("friction", 0.3)
+    hz = scene.get("handle_z", DOOR_HANDLE_HEIGHT)
+    panel_h = 2 * (hz + 0.05)
+    return f"""<?xml version="1.0"?>
+<robot name="door">
+  <link name="frame">
+    <visual><geometry><box size="0.1 0.1 2.0"/></geometry></visual>
+    <collision><geometry><box size="0.1 0.1 2.0"/></geometry></collision>
+    <inertial><mass value="0"/><inertia ixx="1" iyy="1" izz="1"/></inertial>
+  </link>
+  <link name="panel">
+    <visual><geometry><box size="{DOOR_WIDTH} 0.06 {panel_h}"/></geometry>
+      <origin xyz="{DOOR_WIDTH/2} 0 {hz+0.05}"/></visual>
+    <collision><geometry><box size="{DOOR_WIDTH} 0.06 {panel_h}"/></geometry>
+      <origin xyz="{DOOR_WIDTH/2} 0 {hz+0.05}"/></collision>
+    <inertial><mass value="2"/><inertia ixx="0.5" iyy="0.5" izz="0.05"/></inertial>
+  </link>
+  <joint name="hinge" type="revolute">
+    <parent link="frame"/><child link="panel"/>
+    <origin xyz="{dx} {dy} 0"/><axis xyz="0 0 1"/>
+    <limit lower="-1.57" upper="1.57" effort="100" velocity="10"/>
   </joint>
 </robot>
 """
@@ -138,44 +187,40 @@ class PyBulletSimulator:
             p.setGravity(0, 0, -9.81)
             p.setTimeStep(TIMESTEP)
             # PyBullet loadURDF needs a file path, not an inline URDF string.
-            urdf_text = _robot_urdf()
             with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf",
                                              delete=False) as tf:
-                tf.write(urdf_text)
-                self._urdf_path = tf.name
+                tf.write(_robot_urdf()); self._urdf_path = tf.name
             self._uid = p.loadURDF(self._urdf_path, [0, 0, 0])
-            # Load door
-            self._door_uid = p.createCollisionShape(p.GEOM_BOX, halfExtents=[DOOR_WIDTH/2, 0.03, 1.05])
-            self._door_idx = p.createMultiBody(1, self._door_uid, basePosition=[scene["door_x"], scene["door_y"], 1.05])
-            # Create door hinge constraint: pin door base to the world with a
-            # vertical (z) revolute hinge at the floor pivot (door_x, door_y, 0).
-            self._door_constraint = p.createConstraint(
-                self._door_idx, -1, -1, -1,
-                p.JOINT_REVOLUTE,
-                [0, 0, 1],
-                [0, 0, -1.05],
-                [scene["door_x"], scene["door_y"], 0]
-            )
-            # Set friction
-            p.changeDynamics(self._door_idx, -1, lateralFriction=scene.get("friction", 0.3))
+            # Door: URDF with a built-in revolute hinge (createConstraint's
+            # revolute path is rejected by this PyBullet build).
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf",
+                                             delete=False) as tf2:
+                tf2.write(_door_urdf(scene)); self._door_urdf_path = tf2.name
+            self._door_idx = p.loadURDF(self._door_urdf_path, [0, 0, 0])
+            self._door_hinge = 0
+            self._door_panel = 1
+            # Hinge damping mirrors MuJoCo door_hinge damping = scene friction.
+            p.changeDynamics(self._door_idx, self._door_panel,
+                             jointDamping=scene.get("friction", 0.3),
+                             lateralFriction=scene.get("friction", 0.3))
         else:
             # Stub mode - simulate deterministically
             self._stub = True
             self._stub_calls = []
             import tests.bullet_stub as stub
             stub.S.register_sim(self)
-            # Call stub methods to record them
-            self._uid = stub.S.loadURDF(_robot_urdf(), [0, 0, 0])
-            self._door_uid = stub.S.createCollisionShape(stub.S.GEOM_BOX, halfExtents=[DOOR_WIDTH/2, 0.03, 1.05])
-            self._door_idx = stub.S.createMultiBody(1, self._door_uid, basePosition=[scene["door_x"], scene["door_y"], 1.05])
-            self._door_constraint = stub.S.createConstraint(
-                self._door_idx, -1, -1, -1,
-                stub.S.JOINT_REVOLUTE,
-                [0, 0, 0],
-                [0, 0, 0],
-                [scene["door_x"], scene["door_y"], 0]
-            )
-            stub.S.changeDynamics(self._door_idx, -1, lateralFriction=scene.get("friction", 0.3))
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf",
+                                             delete=False) as tf:
+                tf.write(_robot_urdf()); self._urdf_path = tf.name
+            self._uid = stub.S.loadURDF(self._urdf_path, [0, 0, 0])
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf",
+                                             delete=False) as tf2:
+                tf2.write(_door_urdf(scene)); self._door_urdf_path = tf2.name
+            self._door_idx = stub.S.loadURDF(self._door_urdf_path, [0, 0, 0])
+            self._door_hinge = 0
+            self._door_panel = 1
+            stub.S.changeDynamics(self._door_idx, self._door_panel,
+                                  lateralFriction=scene.get("friction", 0.3))
             self._simulate_stub_step(dict(self._pose), self._grip)
 
     def _tick(self, pose: dict, grip: float):
@@ -184,23 +229,26 @@ class PyBulletSimulator:
 
         if available():
             import pybullet as p
-            # Set joint positions
             for i, name in enumerate(ARM_JOINTS):
-                p.setJointMotorControl2(self._uid, i, p.POSITION_CONTROL, targetPosition=pose[name])
-            # Set gripper
-            p.setJointMotorControl2(self._uid, 4, p.POSITION_CONTROL, targetPosition=grip)
-            p.setJointMotorControl2(self._uid, 5, p.POSITION_CONTROL, targetPosition=grip)
+                p.setJointMotorControl2(self._uid, i, p.POSITION_CONTROL,
+                                        targetPosition=pose[name])
+            p.setJointMotorControl2(self._uid, 4, p.POSITION_CONTROL,
+                                    targetPosition=grip)
+            p.setJointMotorControl2(self._uid, 5, p.POSITION_CONTROL,
+                                    targetPosition=grip)
             p.stepSimulation()
-            # Track the door hinge angle from the door body's z-rotation.
-            _, quat = p.getBasePositionAndOrientation(self._door_idx)
-            self._door_angle = p.getEulerFromQuaternion(quat)[2]
+            # Door angle = hinge joint state (revolute about z at the hinge).
+            self._door_angle = p.getJointState(self._door_idx,
+                                               self._door_hinge)[0]
         else:
-            # Stub mode - deterministic simulation
             import tests.bullet_stub as stub
             for i, name in enumerate(ARM_JOINTS):
-                stub.S.setJointMotorControl2(self._uid, i, stub.S.POSITION_CONTROL, targetPosition=pose[name])
-            stub.S.setJointMotorControl2(self._uid, 4, stub.S.POSITION_CONTROL, targetPosition=grip)
-            stub.S.setJointMotorControl2(self._uid, 5, stub.S.POSITION_CONTROL, targetPosition=grip)
+                stub.S.setJointMotorControl2(self._uid, i, stub.S.POSITION_CONTROL,
+                                             targetPosition=pose[name])
+            stub.S.setJointMotorControl2(self._uid, 4, stub.S.POSITION_CONTROL,
+                                        targetPosition=grip)
+            stub.S.setJointMotorControl2(self._uid, 5, stub.S.POSITION_CONTROL,
+                                        targetPosition=grip)
             stub.S.stepSimulation()
 
         self._steps += 1
@@ -209,7 +257,6 @@ class PyBulletSimulator:
 
     def _simulate_stub_step(self, pose: dict, grip: float):
         """Stub physics: simulate door opening based on scene friction."""
-        # Stub mode is handled in bullet_stub; this is a fallback
         pass
 
     def _run(self, target: dict, n: int, grip: float):
@@ -231,10 +278,14 @@ class PyBulletSimulator:
     def _grasp_force(self):
         if available():
             import pybullet as p
-            contacts = p.getContactPoints(linkIndexA=self._uid, linkIndexB=self._door_idx)
-            total = sum(abs(c[10]) for c in contacts if abs(c[10]) > 0)
+            contacts = p.getContactPoints(self._uid, self._door_idx)
+            total = 0.0
+            for c in contacts:
+                # contact normal force magnitude lives at index 9
+                fn = abs(c[9]) if len(c) > 9 else 0.0
+                if fn > 0:
+                    total += fn
             return total
-        # Stub: delegate to stub's simulation state
         if hasattr(self, '_stub') and self._stub:
             import tests.bullet_stub as stub
             return stub.S._peak_force if stub.S._peak_force > 0 else 0.0
@@ -249,10 +300,9 @@ class PyBulletSimulator:
         self._budget = scene["budget"]
         self._t0 = t0
         self._scene_key = key
-        # Handle start position (world coords, used for objectDelta)
         hz_init = scene.get("handle_z", DOOR_HANDLE_HEIGHT)
         self._handle_start_pos = (
-            scene["door_x"] + DOOR_WIDTH,
+            scene["door_x"] + DOOR_WIDTH - 0.05,
             scene["door_y"],
             hz_init,
         )
@@ -269,15 +319,11 @@ class PyBulletSimulator:
             return self._fail("configuration_error", "keyframes unsolvable")
 
         try:
-            # Stage 1: move above handle
             if not self._run(above, 70, 0.050):
                 return self._fail("collision", "obstacle during approach")
-
-            # Stage 2: descend to handle
             if not self._run(grip, 50, 0.050):
                 return self._fail("collision", "obstacle during descent")
 
-            # Stage 3: grip handle
             for i in range(1, 81):
                 self._tick(dict(self._pose), aperture_at(i / 80))
                 f = self._grasp_force()
@@ -291,12 +337,10 @@ class PyBulletSimulator:
 
             handle_state = "gripped"
 
-            # Stage 4: pull door open
             if not self._run(pull_end, 100, 0.032):
                 if self._door_angle < OPEN_ANGLE_MIN:
                     return self._fail("stuck", f"door angle only {self._door_angle:.2f} rad")
 
-            # Stage 5: settle
             self._hold(30, 0.032, sample=True)
 
         except BudgetExhausted:
@@ -324,7 +368,6 @@ class PyBulletSimulator:
             collisions=self._collisions, steps=self._steps,
             budget=self._budget, wall_time=time.perf_counter() - self._t0,
             door_angle=max(self._door_angle, OPEN_ANGLE_MIN + 0.1), note="success")
-        from arm_spec import DoorResult
         return DoorResult(True, "opened", metrics)
 
     def _fail(self, reason: str, note: str):
@@ -337,8 +380,7 @@ class PyBulletSimulator:
             collisions=self._collisions, steps=self._steps,
             budget=self._budget, wall_time=time.perf_counter() - self._t0,
             door_angle=self._door_angle, note=note)
-        from arm_spec import DoorResult
         return DoorResult(False, reason, metrics)
 
 
-__all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
+__all__ = ["PyBulletSimulator", "available", "_robot_urdf", "_door_urdf"]
