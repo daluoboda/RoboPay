@@ -1,0 +1,73 @@
+{
+  "schema": "robopay.metrics/v1",
+  "skill": "fabric",
+  "robot_id": "fabric-arm-001",
+  "skill_id": "fabric_pick",
+  "generated_by": "real test execution + real on-chain evidence (no fabricated values)",
+  "onchain_settlement": {
+    "primary": {
+      "network": "base-sepolia",
+      "asset": "USDC",
+      "real_tx_count": 1,
+      "txs": [
+        "0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2"
+      ],
+      "explorer_base": "https://sepolia.basescan.org/tx/",
+      "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      "payer": "0x2404203a779d1eD676272a719b7E3554f8476B62"
+    },
+    "auxiliary_pi": {
+      "network": null,
+      "real_tx_count": 0,
+      "txs": []
+    },
+    "note": "Primary proof = Base-Sepolia USDC txs. Pi-Network txs, when present, are a separate testnet and are NOT counted as the primary settlement proof."
+  },
+  "payment_gate": {
+    "unpaid_rejected": {
+      "status": "NOT_COVERED",
+      "tests": []
+    },
+    "invalid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "TestSpecIsSingleSource::test_unknown_engine_is_rejected"
+      ],
+      "failed_tests": []
+    },
+    "expired_rejected": {
+      "status": "NOT_COVERED",
+      "tests": []
+    },
+    "replay_rejected": {
+      "status": "NOT_COVERED",
+      "tests": []
+    },
+    "paid_success": {
+      "status": "PASS_ONCHAIN_ONLY",
+      "note": "1 real Base-Sepolia USDC tx(s) recorded.",
+      "onchain_tx_count": 1,
+      "tests": [
+        "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
+        "TestPyBulletBackendContract::test_success_path_completes"
+      ]
+    },
+    "failure_no_settle": {
+      "status": "PASS",
+      "tests": [
+        "TestSpecIsSingleSource::test_unknown_engine_is_rejected",
+        "TestPyBulletBackendContract::test_collision_path_completes",
+        "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
+        "TestPyBulletBackendContract::test_timeout_path_completes",
+        "TestPyBulletBackendContract::test_unreachable_path_completes"
+      ],
+      "failed_tests": []
+    }
+  },
+  "summary": {
+    "all_core_metrics_pass": false,
+    "real_onchain_txs": 1,
+    "ci_gated_dynamic_sim2sim": true,
+    "bridge_unit_test_present": false
+  }
+}
