@@ -1,7 +1,10 @@
 """door-arm-001 --- PyBullet backend for the door-opening skill.
 
-Mirrors the MuJoCo MJCF kinematics exactly so both engines produce
-identical handle_start_pos, IK targets, and contact topology.
+Mirrors the MuJoCo MJCF kinematics exactly. Key design:
+- Arm base at (0,0,0), matching MuJoCo body "base".
+- Column joint at (0,0,0.05), column link centered at (0,0,0.45).
+- Shoulder at (0,0,0.80) world, matching MuJoCo.
+- Finger origins at y=±0.025 so inner edges can reach handle at y=0.04.
 """
 from __future__ import annotations
 
@@ -35,29 +38,32 @@ def _mass_box(m: float, hx: float, hy: float, hz: float) -> str:
 
 
 def _robot_urdf() -> str:
-    """Arm URDF mirroring MuJoCo MJCF kinematics exactly."""
+    """Arm URDF matching MuJoCo MJCF kinematics exactly."""
     m_base, m_col, m_up, m_fore, m_wr, m_fg = 2.0, 1.5, 1.0, 0.8, 0.3, 0.15
 
     return f"""<?xml version="1.0" ?>
 <robot name="door-arm-001">
+  <!-- Base on ground -->
   <link name="base">
     <visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual>
     <collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision>
     {_mass_box(m_base, 0.07, 0.07, 0.025)}
   </link>
+  <!-- Column rises from base joint -->
   <link name="column">
-    <visual><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
-    <collision><origin xyz="0 0 0.45"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
+    <visual><origin xyz="0 0 0.175"/><geometry><cylinder radius="0.035" length="0.35"/></geometry><material name="grey"><color rgba="0.30 0.32 0.38 1"/></material></visual>
+    <collision><origin xyz="0 0 0.175"/><geometry><cylinder radius="0.035" length="0.35"/></geometry></collision>
     {_mass_box(m_col, 0.035, 0.035, 0.175)}
   </link>
   <joint name="pan" type="revolute">
     <parent link="base"/><child link="column"/>
-    <origin xyz="0 0 0.45"/><axis xyz="0 0 1"/>
+    <origin xyz="0 0 0.05"/><axis xyz="0 0 1"/>
     <limit lower="-3.1416" upper="3.1416" effort="100" velocity="10"/>
   </joint>
+  <!-- Upper arm at shoulder height 0.80 -->
   <link name="upper">
-    <visual><origin xyz="0 0 0.35"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
-    <collision><origin xyz="0 0 0.35"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
+    <visual><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
+    <collision><origin xyz="0 0 0"/><geometry><cylinder radius="0.03" length="0.28"/></geometry></collision>
     {_mass_box(m_up, 0.14, 0.03, 0.03)}
   </link>
   <joint name="shoulder" type="revolute">
@@ -65,6 +71,7 @@ def _robot_urdf() -> str:
     <origin xyz="0 0 0.35"/><axis xyz="0 1 0"/>
     <limit lower="-2.0" upper="2.0" effort="100" velocity="10"/>
   </joint>
+  <!-- Forearm -->
   <link name="fore">
     <visual><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry><material name="arm"><color rgba="0.85 0.55 0.18 1"/></material></visual>
     <collision><origin xyz="0.12 0 0"/><geometry><cylinder radius="0.026" length="0.24"/></geometry></collision>
@@ -75,6 +82,7 @@ def _robot_urdf() -> str:
     <origin xyz="0.28 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.6" upper="2.6" effort="100" velocity="10"/>
   </joint>
+  <!-- Wrist -->
   <link name="wrist">
     <visual><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry><material name="dark"><color rgba="0.30 0.32 0.38 1"/></material></visual>
     <collision><origin xyz="0 0 0"/><geometry><box size="0.064 0.060 0.036"/></geometry></collision>
@@ -85,6 +93,7 @@ def _robot_urdf() -> str:
     <origin xyz="0.24 0 0"/><axis xyz="0 1 0"/>
     <limit lower="-2.8" upper="2.8" effort="100" velocity="10"/>
   </joint>
+  <!-- Fingers: inner edges must reach handle at y=0.04 -->
   <link name="finger_l">
     <visual><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry><material name="light"><color rgba="0.90 0.90 0.92 1"/></material></visual>
     <collision><origin xyz="0 0 -0.045"/><geometry><box size="0.028 0.016 0.090"/></geometry></collision>
@@ -188,22 +197,21 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Door — base at (dx, dy, 0), matching MuJoCo body "door" pos
+        # Door at (dx, dy, 0), matching MuJoCo body "door" pos
         df = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
         df.write(_door_urdf(scene))
         df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
-        # Arm — base at (0,0,0), matching MuJoCo body "base" pos
+        # Arm at (0,0,0), matching MuJoCo body "base" pos
         af = tempfile.NamedTemporaryFile(mode="w", suffix="_arm.urdf", delete=False)
         af.write(_robot_urdf())
         af.close()
         self._arm_uid = p.loadURDF(af.name, [0, 0, 0.0])
         Path(af.name).unlink(missing_ok=True)
 
-        # Handle start pos: mirror MuJoCo exactly
-        # MuJoCo: handle body pos = [DOOR_WIDTH - 0.05, 0.04, hz] = [0.45, 0.04, 0.85]
+        # Handle start pos: [DOOR_WIDTH - 0.05, 0.04, hz] = [0.45, 0.04, 0.85]
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
@@ -248,7 +256,6 @@ class PhysicsServer:
         self._update_door_angle()
 
     def _get_contact_force(self) -> float:
-        """Sum of normal contact forces between arm and door bodies."""
         contacts = self._p.getContactPoints()
         total = 0.0
         for c in contacts:
@@ -280,7 +287,6 @@ class PyBulletSimulator:
         return self._sim
 
     def open_door(self, params: dict | None = None):
-        """Run one door-opening episode and return a DoorResult."""
         from arm_spec import (
             resolve_scene, build_metrics, DoorResult,
             OPEN_ANGLE_MIN, GRASP_FORCE_MIN,
