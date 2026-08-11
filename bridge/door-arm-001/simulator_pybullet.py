@@ -4,6 +4,7 @@ Mirrors the MuJoCo MJCF kinematics and control exactly:
 - base links fixed (useFixedBase=True) so bodies don't drift
 - arm joints held by position control every step (like MuJoCo's qpos write)
 - finger origins at y=0 symmetric (like MuJoCo slide joints)
+- one physics step per trajectory phase step (MuJoCo is 1:1 too)
 """
 from __future__ import annotations
 
@@ -185,8 +186,8 @@ class PhysicsServer:
         self._collisions: int = 0
         self._steps: int = 0
         self._budget: int = 400
-        self._targets: dict = {}          # joint_name -> target value
-        self._arm_joint_ids: dict = {}    # joint_name -> joint index
+        self._targets: dict = {}
+        self._arm_joint_ids: dict = {}
 
     def connect(self) -> None:
         self._p.connect(self._p.DIRECT)
@@ -347,14 +348,13 @@ class PyBulletSimulator:
         if above is None or grip is None or pull_end is None:
             return make_result(False, "configuration_error", "keyframes unsolvable")
 
-        # Stage 1: move above handle
+        # Stage 1: move above handle (1 step per phase step, like MuJoCo)
         if above:
             for i in range(1, STAGE_STEPS["move_above"] + 1):
                 pose = blend({"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0},
                              above, i / STAGE_STEPS["move_above"])
                 sim.apply_action(pose)
-                for _ in range(5):
-                    sim._tick()
+                sim._tick()
                 if sim._steps >= sim._budget:
                     break
 
@@ -364,8 +364,7 @@ class PyBulletSimulator:
                 start = above if above else {"pan": 0, "shoulder": 0, "elbow": 0, "wristp": 0}
                 pose = blend(start, grip, i / STAGE_STEPS["descend"])
                 sim.apply_action(pose)
-                for _ in range(5):
-                    sim._tick()
+                sim._tick()
                 if sim._steps >= sim._budget:
                     break
 
@@ -374,8 +373,7 @@ class PyBulletSimulator:
             aperture = aperture_at(i / STAGE_STEPS["grip"])
             sim._set_joint_state(sim._arm_uid, "grip_l", aperture)
             sim._set_joint_state(sim._arm_uid, "grip_r", -aperture)
-            for _ in range(5):
-                sim._tick()
+            sim._tick()
             if sim._steps >= sim._budget:
                 break
             force = sim._get_contact_force()
@@ -396,8 +394,7 @@ class PyBulletSimulator:
             for i in range(1, STAGE_STEPS["pull"] + 1):
                 pose = blend(grip, pull_end, i / STAGE_STEPS["pull"])
                 sim.apply_action(pose)
-                for _ in range(5):
-                    sim._tick()
+                sim._tick()
                 if sim._steps >= sim._budget:
                     break
 
