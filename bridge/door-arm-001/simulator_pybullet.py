@@ -123,6 +123,7 @@ def _door_urdf(scene: dict) -> str:
     """
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
+    friction = scene.get("friction", 0.3)
     w = 0.50
     hz_full = hz + 0.05
     m_door = 3.0
@@ -153,10 +154,13 @@ def _door_urdf(scene: dict) -> str:
     <collision><origin xyz="{w - 0.05} 0.04 {hz}"/><geometry><cylinder radius="0.015" length="0.04"/></geometry></collision>
     {_mass_box(0.2, 0.015, 0.02, 0.015)}
   </link>
+  <!-- door_hinge damping mirrors MuJoCo's damping="{friction}":
+       open scene -> 0.3, stuck scene -> 5.0 (hard to swing) -->
   <joint name="door_hinge" type="revolute">
     <parent link="base"/><child link="panel"/>
     <origin xyz="0 0 0"/><axis xyz="0 0 1"/>
     <limit lower="0" upper="1.57" effort="100" velocity="10"/>
+    <dynamics damping="{friction:.4f}" friction="0.01"/>
   </joint>
   <!-- handle rigidly attached to the panel so pulling the handle swings the
        door (MuJoCo's handle_rot hinge is effectively locked by the fingers) -->
