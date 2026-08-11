@@ -3,12 +3,12 @@
   <link name="world">
     <visual>
       <origin xyz="0 0 0"/>
-      <geometry><plane size="2 2"/></geometry>
+      <geometry><box size="4 4 0.01"/></geometry>
       <material name="floor_mat"><color rgba="0.16 0.18 0.22 1"/></material>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
-      <geometry><plane size="2 2"/></geometry>
+      <geometry><box size="4 4 0.01"/></geometry>
     </collision>
   </link>
 </robot>
