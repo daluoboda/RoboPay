@@ -158,10 +158,11 @@ def _door_urdf(scene: dict) -> str:
     <origin xyz="0 0 0"/><axis xyz="0 0 1"/>
     <limit lower="0" upper="1.57" effort="100" velocity="10"/>
   </joint>
-  <joint name="handle_rot" type="revolute">
+  <!-- handle rigidly attached to the panel so pulling the handle swings the
+       door (MuJoCo's handle_rot hinge is effectively locked by the fingers) -->
+  <joint name="handle_rot" type="fixed">
     <parent link="panel"/><child link="handle"/>
-    <origin xyz="0 0 0"/><axis xyz="0 1 0"/>
-    <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
+    <origin xyz="0 0 0"/>
   </joint>
 </robot>
 """
