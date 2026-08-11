@@ -90,7 +90,7 @@ class PhysicsServer:
         Path(af.name).unlink(missing_ok=True)
 
         # Record handle start pos
-        n = p.getJointCount(self._door_idx)
+        n = p.getNumJoints(self._door_idx)
         for j in range(n):
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'handle_rot':
@@ -107,7 +107,7 @@ class PhysicsServer:
 
     def _update_door_angle(self) -> None:
         p = self._p
-        n = p.getJointCount(self._door_idx)
+        n = p.getNumJoints(self._door_idx)
         for j in range(n):
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'door_hinge':
@@ -116,7 +116,7 @@ class PhysicsServer:
         self._door_angle = 0.0
 
     def _get_joint_state(self, body_uid: int, joint_name: str) -> float:
-        n = self._p.getJointCount(body_uid)
+        n = self._p.getNumJoints(body_uid)
         for j in range(n):
             info = self._p.getJointInfo(body_uid, j)
             if info[1].decode() == joint_name:
@@ -124,7 +124,7 @@ class PhysicsServer:
         return 0.0
 
     def _set_joint_state(self, body_uid: int, joint_name: str, value: float) -> None:
-        n = self._p.getJointCount(body_uid)
+        n = self._p.getNumJoints(body_uid)
         for j in range(n):
             info = self._p.getJointInfo(body_uid, j)
             if info[1].decode() == joint_name:
