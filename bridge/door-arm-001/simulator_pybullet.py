@@ -77,7 +77,7 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Load door only (no frame to avoid segfault)
+        # Load door only
         df = tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False)
         df.write(_door_urdf(scene)); df.close()
         self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
@@ -89,11 +89,10 @@ class PhysicsServer:
         self._arm_uid = p.loadURDF(af.name, [0, 0, 0.05])
         Path(af.name).unlink(missing_ok=True)
 
-        # Record handle start pos (compute from scene params since URDF link indices are tricky)
+        # Record handle start pos
         hz = scene.get("handle_z", 0.85)
         dx = scene["door_x"]
         w = 0.50
-        # Handle is at (dx + w - 0.05, 0, hz) in world coords when door=0
         self._handle_start_pos = [dx + w - 0.05, 0.04, hz]
 
         self._steps = 0
@@ -159,9 +158,10 @@ class PyBulletSimulator:
             self._sim.connect()
         return self._sim
 
-    def open_door(self, params: dict | None = None) -> dict:
+    def open_door(self, params: dict | None = None):
+        """Run one door-opening episode and return a DoorResult."""
         from arm_spec import (
-            resolve_scene, build_metrics,
+            resolve_scene, build_metrics, DoorResult,
             OPEN_ANGLE_MIN, GRASP_FORCE_MIN,
             STAGE_STEPS, aperture_at, blend,
             solve, DOOR_WIDTH,
@@ -182,16 +182,7 @@ class PyBulletSimulator:
         grip = solve(hx, hz + GRIP_MID)
         pull_end = solve(hx - 0.20, hz - 0.05 + GRIP_MID)
 
-        if above is None or grip is None or pull_end is None:
-            return {"success": False, "reason": "configuration_error",
-                    "metrics": build_metrics(engine=self.ENGINE, obj=name,
-                        scene_key=key, stage="full", handle_state="ungripped",
-                        start_pos=handle_start, end_pos=handle_start.copy(),
-                        hold_force=0, peak_force=0, contact_samples=0,
-                        collisions=0, steps=0, budget=400,
-                        wall_time=0, door_angle=0, note="keyframes unsolvable")}
-
-        def report(success, reason, note=""):
+        def make_result(success, reason, note=""):
             hold = (sum(sim._hold_forces) / len(sim._hold_forces)
                     if sim._hold_forces else 0.0)
             import math
@@ -200,7 +191,7 @@ class PyBulletSimulator:
                 DOOR_WIDTH * math.sin(sim._door_angle),
                 0.0
             ]
-            return build_metrics(engine=self.ENGINE, obj=name,
+            metrics = build_metrics(engine=self.ENGINE, obj=name,
                 scene_key=key, stage="full", handle_state=handle_state,
                 start_pos=handle_start, end_pos=handle_end,
                 hold_force=hold, peak_force=sim._peak_force,
@@ -209,6 +200,10 @@ class PyBulletSimulator:
                 budget=sim._budget,
                 wall_time=time.perf_counter() - t0,
                 door_angle=sim._door_angle, note=note)
+            return DoorResult(success, reason, metrics)
+
+        if above is None or grip is None or pull_end is None:
+            return make_result(False, "configuration_error", "keyframes unsolvable")
 
         # Stage 1: move above handle
         if above:
