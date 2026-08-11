@@ -23,14 +23,10 @@ ENGINE = "pybullet"
 def available() -> bool:
     """True when the real PyBullet wheel is importable (not our stub)."""
     try:
-        mod = sys.modules.get("pybullet")
-        if mod is None:
-            return False
-        # If it's our stub module, it's not real
-        if getattr(mod, '__file__', '').endswith('bullet_stub.py'):
-            return False
-        # Try importing to see if it's real
         import pybullet as p
+        # If tests registered our stub under the pybullet name, treat as absent.
+        if getattr(p, '__file__', '').endswith('bullet_stub.py'):
+            return False
         return hasattr(p, 'loadURDF') and callable(p.loadURDF)
     except Exception:
         return False
@@ -135,6 +131,10 @@ class PyBulletSimulator:
         if available():
             import pybullet as p
             self._p = p
+            # Spin up a real physics server (per run; small scenes, cheap).
+            p.connect(p.DIRECT)
+            p.setGravity(0, 0, -9.81)
+            p.setTimeStep(TIMESTEP)
             self._uid = p.loadURDF(_robot_urdf(), [0, 0, 0])
             # Load door
             self._door_uid = p.createCollisionShape(p.GEOM_BOX, halfExtents=[DOOR_WIDTH/2, 0.03, 1.05])
@@ -182,6 +182,9 @@ class PyBulletSimulator:
             p.setJointMotorControl2(self._uid, 4, p.POSITION_CONTROL, targetPosition=grip)
             p.setJointMotorControl2(self._uid, 5, p.POSITION_CONTROL, targetPosition=grip)
             p.stepSimulation()
+            # Track the door hinge angle from the door body's z-rotation.
+            _, quat = p.getBasePositionAndOrientation(self._door_idx)
+            self._door_angle = p.getEulerFromQuaternion(quat)[2]
         else:
             # Stub mode - deterministic simulation
             import tests.bullet_stub as stub
@@ -330,3 +333,5 @@ class PyBulletSimulator:
 
 
 __all__ = ["PyBulletSimulator", "available", "_robot_urdf"]
+
+# MARKER_V3_PROOF
