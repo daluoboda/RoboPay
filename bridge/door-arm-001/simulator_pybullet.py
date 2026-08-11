@@ -147,12 +147,13 @@ class PyBulletSimulator:
             # Load door
             self._door_uid = p.createCollisionShape(p.GEOM_BOX, halfExtents=[DOOR_WIDTH/2, 0.03, 1.05])
             self._door_idx = p.createMultiBody(1, self._door_uid, basePosition=[scene["door_x"], scene["door_y"], 1.05])
-            # Create door hinge constraint
+            # Create door hinge constraint: pin door base to the world with a
+            # vertical (z) revolute hinge at the floor pivot (door_x, door_y, 0).
             self._door_constraint = p.createConstraint(
                 self._door_idx, -1, -1, -1,
                 p.JOINT_REVOLUTE,
-                [0, 0, 0],
-                [0, 0, 0],
+                [0, 0, 1],
+                [0, 0, -1.05],
                 [scene["door_x"], scene["door_y"], 0]
             )
             # Set friction
