@@ -4,9 +4,6 @@ Single source of truth: arm_spec.py owns the scene table, joint chain,
 kinematics, and pass/fail thresholds. This file only translates those
 into PyBullet calls. Falls back to bullet_stub.py when PyBullet is
 absent (Windows CI / import-only environments).
-
-CRITICAL: The URDF below is a手工重建的 MuJoCo MJCF 的精确等价版本，
-确保两个引擎的 doorAngle、handleState、verdict 完全一致。
 """
 from __future__ import annotations
 
@@ -33,10 +30,16 @@ def available() -> bool:
 
 
 # -----------------------------------------------------------------------
-# URDF: arm (matches MuJoCo arm_spec.py kinematics exactly)
+# URDF helpers (public API for tests)
 # -----------------------------------------------------------------------
-# BASE_H=0.80, LINK1=0.28, LINK2=0.24, GRIP_MID=0.065
-_ARM_URDF_BODY = """<?xml version="1.0" ?>
+
+def _robot_urdf() -> str:
+    """Return the canonical URDF string for the arm robot.
+
+    This is the single source of truth shared with MuJoCo's MJCF.
+    """
+    # BASE_H=0.80, LINK1=0.28, LINK2=0.24, GRIP_MID=0.065
+    return """<?xml version="1.0" ?>
 <robot name="door-arm-001">
   <!-- Base: cylinder on floor -->
   <link name="base"><visual><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry><material name="dark"><color rgba="0.25 0.27 0.32 1"/></material></visual><collision><origin xyz="0 0 0.025"/><geometry><cylinder radius="0.07" length="0.05"/></geometry></collision></link>
@@ -67,24 +70,13 @@ _ARM_URDF_BODY = """<?xml version="1.0" ?>
 """
 
 
-def _robot_urdf_path() -> str:
-    f = tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False)
-    f.write(_ARM_URDF_BODY)
-    f.close()
-    return f.name
-
-
-# -----------------------------------------------------------------------
-# URDF: door + frame (matches MuJoCo _model_xml scene exactly)
-# -----------------------------------------------------------------------
-
 def _door_urdf(scene: dict) -> tuple[str, str]:
     """Return (frame_urdf, door_urdf) strings."""
     dx, dy = scene["door_x"], scene["door_y"]
     hz = scene.get("handle_z", 0.85)
     w = 0.50  # DOOR_WIDTH
 
-    # Frame: left jamb, right jamb, top header (3 separate bodies)
+    # Frame: left jamb, right jamb, top header
     frame = f"""<?xml version="1.0" ?>
 <robot name="door-frame">
   <link name="frame_l"><visual><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry><material name="grey"><color rgba="0.4 0.4 0.45 1"/></material></visual><collision><origin xyz="-0.05 0 1.05"/><geometry><box size="0.05 0.05 2.10"/></geometry></collision></link>
@@ -93,7 +85,6 @@ def _door_urdf(scene: dict) -> tuple[str, str]:
 </robot>
 """
     # Door: fixed base at hinge + revolute panel + handle on panel
-    # Base link is at (dx, dy, 0) — the hinge axis. Panel rotates about it.
     door = f"""<?xml version="1.0" ?>
 <robot name="door-panel">
   <link name="base"><visual><geometry><box size="0.001 0.001 0.001"/></geometry></visual><collision><geometry><box size="0.001 0.001 0.001"/></geometry></collision></link>
@@ -141,7 +132,7 @@ class PhysicsServer:
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.TIMESTEP)
 
-        # Floor
+        # Floor (if file exists)
         floor_path = str(Path(__file__).parent / "floor.urdf")
         if Path(floor_path).exists():
             p.loadURDF(floor_path, [0, 0, -0.001])
@@ -153,24 +144,25 @@ class PhysicsServer:
         p.loadURDF(ff.name, [0, 0, 0])
         Path(ff.name).unlink(missing_ok=True)
 
-        # Door panel (hinged at left edge)
+        # Door panel (base link at door_x, door_y)
         df = tempfile.NamedTemporaryFile(mode='w', suffix='_door.urdf', delete=False)
         df.write(door_urdf_str); df.close()
-        self._door_idx = p.loadURDF(df.name, [dx, dy, 0])  # base link at door_x, door_y
+        self._door_idx = p.loadURDF(df.name, [scene["door_x"], scene["door_y"], 0])
         Path(df.name).unlink(missing_ok=True)
 
         # Arm robot
-        arm_path = _robot_urdf_path()
-        self._arm_uid = p.loadURDF(arm_path, [0, 0, 0.05])
+        arm_path = tempfile.NamedTemporaryFile(mode='w', suffix='_arm.urdf', delete=False)
+        arm_path.write(_robot_urdf())
+        arm_path.close()
+        self._arm_uid = p.loadURDF(arm_path.name, [0, 0, 0.05])
+        Path(arm_path.name).unlink(missing_ok=True)
 
-        # Record handle start position (world coords)
-        # Handle is a child link of the door panel; get its base pos when door=0
+        # Record handle start position
         n_door_joints = p.getJointCount(self._door_idx)
         for j in range(n_door_joints):
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'handle_rot':
-                # Get handle link world pos via getLinkState
-                ls = p.getLinkState(self._door_idx, j + 1)  # link index = joint_idx + 1
+                ls = p.getLinkState(self._door_idx, j + 1)
                 self._handle_start_pos = list(ls[0])
                 break
 
@@ -189,7 +181,7 @@ class PhysicsServer:
             info = p.getJointInfo(self._door_idx, j)
             if info[1].decode() == 'door_hinge':
                 state = p.getJointState(self._door_idx, j)
-                self._door_angle = state[0]  # position
+                self._door_angle = state[0]
                 return
         self._door_angle = 0.0
 
@@ -249,10 +241,10 @@ class PhysicsServer:
 
 
 # -----------------------------------------------------------------------
-# DoorSimulator
+# PyBulletSimulator (public class matching MuJoCoSimulator API)
 # -----------------------------------------------------------------------
 
-class DoorSimulator:
+class PyBulletSimulator:
     """Door-opening simulator; uses real PyBullet when available."""
 
     ROBOT_ID = "door-arm-001"
@@ -275,7 +267,7 @@ class DoorSimulator:
             resolve_scene, build_metrics,
             OPEN_ANGLE_MIN, GRASP_FORCE_MIN,
             STAGE_STEPS, aperture_at, blend,
-            solve, BASE_H, LINK1, LINK2, GRIP_MID, DOOR_WIDTH,
+            solve, DOOR_WIDTH,
         )
         name, key, scene = resolve_scene(params)
         self._scene = scene
@@ -287,8 +279,8 @@ class DoorSimulator:
         handle_state = "ungripped"
 
         hx = scene["door_x"] + DOOR_WIDTH - 0.05
-        hy = scene["door_y"]
         hz = scene.get("handle_z", 0.85)
+        GRIP_MID = 0.065
 
         above = solve(hx, hz + 0.10 + GRIP_MID)
         grip = solve(hx, hz + GRIP_MID)
@@ -397,4 +389,4 @@ class DoorSimulator:
             self._sim = None
 
 
-__all__ = ["DoorSimulator", "available"]
+__all__ = ["PyBulletSimulator", "available", "_robot_urdf", "_door_urdf"]
