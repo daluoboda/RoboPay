@@ -251,7 +251,7 @@ class PyBulletSimulator:
                          restitution=0.0, linearDamping=0.0, angularDamping=0.0,
                          contactStiffness=CONTACT_STIFFNESS,
                          contactDamping=CONTACT_DAMPING,
-                         activationState=p.ACTIVATION_STATE_DISABLE_DEACTIVATION,
+                         activationState=4,  # ACTIVATION_STATE_DISABLE_DEACTIVATION; avoid pybullet API compat issue
                          physicsClientId=c)
         p.setCollisionFilterGroupMask(self.cube, -1, G_CUBE, M_CUBE, physicsClientId=c)
 
