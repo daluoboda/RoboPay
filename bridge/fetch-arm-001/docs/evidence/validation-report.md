@@ -11,9 +11,7 @@
 - Skill: 
 - Price:  ( smallest units)
 
-The payee wallet address, payer wallet address, and exact x402 signatures are
-intentionally excluded from the public report; the on-chain transaction hash
-and robot behavior evidence are disclosed below.
+The payer/payee wallet addresses and on-chain transaction hashes are disclosed in the canonical report under `registry/…/docs/validation-report.md` and `x402-evidence.json` (payer `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a` → payee `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`, settled on Base Sepolia).
 
 ## What was validated live
 
