@@ -3,17 +3,24 @@
   "skill": "sort",
   "onchain_settlement": {
     "primary": {
-      "txs": [],
-      "real_tx_count": 3,
-      "payer": "0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
+      "txs": [
+        "0xea4f54c97c26762915615023cffeb942f858c51963ef1e2117de4de28b8f16d0",
+        "0x293fbd53d9d5ba624bea4c4618c2d0da8181b2f2205cf8fbb3663eb125daf909",
+        "0xf4b6e8c9e333a678de86089aba7284f13ebba8f3d6d24ebb1503b3ea3afeb97a",
+        "0x93532a6b6accecbc4c7fc674dccac5f09d237343a9fff87482caceb3f0bb994f",
+        "0x083aef1db57309910cb7cf30f61a5985f376f4b2c019e0d8b2638f52df5a6802",
+        "0xf50f858881373b964b05ca461180866077de57cd32497d2023311bf3a7712d2f"
+      ],
+      "real_tx_count": 6,
+      "payer": "0xA0723A2dA2bFa349919A467446Fb54569b2f3d13",
       "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
     }
   },
   "payment_gate": {
     "paid_success": {
       "status": "PASS_ONCHAIN_ONLY",
-      "note": "3 real Base-Sepolia USDC tx(s) verified",
-      "onchain_tx_count": 3
+      "note": "6 real Base-Sepolia USDC tx(s) verified",
+      "onchain_tx_count": 6
     }
   }
 }
