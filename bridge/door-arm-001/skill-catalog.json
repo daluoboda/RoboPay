@@ -1,0 +1,33 @@
+[
+  {
+    "skill_id": "open_door",
+    "description": "RoboPay Tier 1 paid action on door-arm-001 executed in MuJoCo.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {
+      "door": {
+        "type": "string",
+        "values": [
+          "open",
+          "stuck",
+          "out_of_range",
+          "normal",
+          "stuck_door",
+          "far_door"
+        ]
+      },
+      "maxSteps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 2000
+      }
+    }
+  },
+  {
+    "skill_id": "stop",
+    "description": "Safely interrupt an active execution and command neutral joint states.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {}
+  }
+]

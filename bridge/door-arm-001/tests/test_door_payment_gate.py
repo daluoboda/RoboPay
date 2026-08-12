@@ -1,157 +1,484 @@
-# Payment Gate Test - door
-# Tests Criterion #1 and #4: x402 verification fails closed, failure paths don't settle
-# Extended from Spot PR #58 with 15 sub-tests
+"""Exercise door-arm-001's x402 payment gate through the real Go Tunnel binary.
 
-import pytest
-import time
-import sys
+Covers every point of the Tier 1 CHANGES_REQUESTED pattern:
+
+  * a reproducible unpaid 402 case          -> test_unpaid_malformed_rejected_fail_closed
+  * a Tunnel-verified paid action           -> test_paid_action_publishes_and_settles
+  * a correlated simulator result           -> result matched by action_id/params_hash
+  * success-only settlement                 -> settle only on simulator success
+  * failure / timeout left unsettled        -> test_failed_execution_does_not_settle,
+                                                test_timeout_does_not_settle
+
+The proxy speaks the same WebSocket envelope as Fabric, while the Tunnel
+binary, its x402 middleware, its facilitator HTTP calls and its Zenoh action
+handoff stay real. A simulator-side subscriber drives the real MuJoCo
+executor and publishes the correlated result envelope.
+"""
+
+from __future__ import annotations
+
+import json
 import os
-from unittest.mock import MagicMock
-from decimal import Decimal
+import socket
+import subprocess
+import tempfile
+import threading
+import time
+import unittest
+import uuid
+from pathlib import Path
 
-# Add bridge path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import zenoh
 
-try:
-    from bridge.door-arm-001.flow.x402 import X402Verifier
-    from bridge.door-arm-001.flow.payment import PaymentProcessor
-    HAS_BRIDGE = True
-except ImportError:
-    HAS_BRIDGE = False
+from x402_harness import (
+    ActionBoundaryObserver,
+    FacilitatorHandler,
+    LocalFabricProxy,
+    NETWORK,
+    PAYEE,
+    _TunnelConnection,
+    find_tunnel_binary,
+    http_get,
+    http_post,
+    payment_signature_from_402,
+    start_facilitator,
+)
 
-
-class TestPaymentGate:
-    """Extended payment gate tests for door skill."""
-
-    PAYER = "0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a"
-    PAYEE = "0x742d35Cc514D6A81Cfe9A3D6c4E5B2F1a8C9d0E1"
-    PRICE = Decimal("0.1")  # USDC
-
-    @pytest.fixture
-    def mock_verifier(self):
-        return MagicMock(spec=X402Verifier)
-
-    @pytest.fixture
-    def mock_processor(self):
-        return MagicMock(spec=PaymentProcessor)
-
-    # --- Criterion #1: x402 verification fails closed ---
-
-    def test_01_unpaid_returns_402(self, mock_processor):
-        """Test 1: Unpaid POST returns HTTP 402."""
-        response_code = 402
-        assert response_code == 402, "Must return 402 for unpaid request"
-
-    def test_02_zero_zenoh_actions_on_unpaid(self, mock_verifier):
-        """Test 2: Zero Zenoh actions published when unpaid."""
-        actions_published = 0
-        assert actions_published == 0, "No actions should be published without payment"
-
-    def test_03_expired_payment_rejected(self, mock_processor):
-        """Test 3: Expired payment is rejected."""
-        payment_valid = False
-        expiry_time = time.time() - 3600  # 1 hour ago
-        assert not payment_valid, "Expired payment must be rejected"
-
-    def test_04_replay_protection(self, mock_verifier):
-        """Test 4: Replay protection prevents duplicate settlement."""
-        action_id = "test-action-replay"
-        settlements = []
-        # First settlement
-        settlements.append(action_id)
-        # Second settlement with same actionId - must be rejected
-        duplicate = action_id in settlements
-        assert not duplicate, "Duplicate settlement must be prevented"
-
-    def test_05_invalid_signature_rejected(self, mock_processor):
-        """Test 5: Invalid signature is rejected with HTTP 400."""
-        signature_valid = False
-        assert not signature_valid, "Invalid signature must be rejected"
-
-    def test_06_insufficient_funds_rejected(self, mock_verifier):
-        """Test 6: Insufficient funds returns HTTP 402 INSUFFICIENT_FUNDS."""
-        payment_amount = Decimal("0.05")  # Less than required 0.1
-        required_amount = Decimal("0.1")
-        assert payment_amount < required_amount, "Payment must be rejected for insufficient funds"
-
-    def test_07_wrong_payer_rejected(self, mock_processor):
-        """Test 7: Wrong payer address is rejected."""
-        payer = "0xWrongPayer123456789012345678901234567890AB"
-        correct_payer = self.PAYER
-        assert payer != correct_payer, "Wrong payer must be rejected"
-
-    def test_08_wrong_payee_rejected(self, mock_verifier):
-        """Test 8: Wrong payee address is rejected."""
-        payee = "0xWrongPayee123456789012345678901234567890CD"
-        correct_payee = self.PAYEE
-        assert payee != correct_payee, "Wrong payee must be rejected"
-
-    def test_09_wrong_amount_rejected(self, mock_processor):
-        """Test 9: Wrong payment amount is rejected."""
-        amount = Decimal("0.2")  # Double the required amount
-        required = self.PRICE
-        assert amount != required, "Wrong amount must be rejected"
-
-    def test_10_checksum_invalid(self, mock_verifier):
-        """Test 10: Invalid checksum address is rejected."""
-        address = "0xf2749b5fad a8a83d3de1a2621b1d212e73907d4a"  # Invalid (spaces)
-        assert len(address.replace("0x", "")) == 40, "Invalid checksum address"
-
-    # --- Criterion #4: Failure paths don't settle ---
-
-    def test_11_timeout_no_settlement(self, mock_processor):
-        """Test 11: Timeout path produces no settlement."""
-        settled = False
-        assert not settled, "Timeout must not trigger settlement"
-
-    def test_12_failure_no_settlement(self, mock_verifier):
-        """Test 12: Execution failure produces no settlement."""
-        settled = False
-        assert not settled, "Failed execution must not trigger settlement"
-
-    def test_13_replay_no_double_settlement(self, mock_processor):
-        """Test 13: Replay attempt produces no second settlement."""
-        settlements_count = 1  # Only one legitimate settlement
-        replay_attempts = 0
-        assert settlements_count == 1, "Replay must not create additional settlements"
-
-    def test_14_unauthorized_skill_id_rejected(self, mock_verifier):
-        """Test 14: Unauthorized skill ID is rejected."""
-        skill_id = "unknown.skill"
-        authorized = False
-        assert not authorized, "Unauthorized skill must be rejected"
-
-    def test_15_missing_payment_field_rejected(self, mock_processor):
-        """Test 15: Missing payment field returns HTTP 400."""
-        payment_present = False
-        assert not payment_present, "Missing payment must be rejected"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
+SKILL_CATALOG = ROOT / "bridge/door-arm-001" / "skill-catalog.json"
+BRIDGE_PYTHONPATH = str(ROOT / "bridge/door-arm-001")
+ROBOT_ID = "door_arm_001_payment_gate"
+ZENOH_TEST_PORT = int(os.environ.get("DOOR_PAYMENT_GATE_ZENOH_PORT", "7447"))
+PRICE = "0.10"
+ALLOWED_ACTIONS = "open_door,stop"
+ACTION_TOPIC = "robot/tunnel/action"
+RESULT_TOPIC = "robot/tunnel/result"
+EXECUTION_TIMEOUT_SECONDS = "8"
 
 
-class TestCriterionCoverage:
-    """Verify Criterion #1 and #4 coverage for door."""
+def _server_frame(payload: bytes, opcode: int, final: bool) -> bytes:
+    header = bytes([(0x80 if final else 0) | opcode])
+    length = len(payload)
+    if length < 126:
+        return header + bytes([length]) + payload
+    if length <= 0xFFFF:
+        return header + bytes([126]) + length.to_bytes(2, "big") + payload
+    return header + bytes([127]) + length.to_bytes(8, "big") + payload
 
-    def test_criterion_1_coverage(self):
-        """Map tests to Criterion #1."""
-        tests = [
-            "test_01_unpaid_returns_402",
-            "test_02_zero_zenoh_actions_on_unpaid",
-            "test_03_expired_payment_rejected",
-            "test_07_wrong_payer_rejected",
-            "test_08_wrong_payee_rejected",
-            "test_09_wrong_amount_rejected"
-        ]
-        assert len(tests) == 6
 
-    def test_criterion_4_coverage(self):
-        """Map tests to Criterion #4."""
-        tests = [
-            "test_04_replay_protection",
-            "test_11_timeout_no_settlement",
-            "test_12_failure_no_settlement",
-            "test_13_replay_no_double_settlement"
-        ]
-        assert len(tests) == 4
+class SimulatorSide:
+    """Subscribes to the Tunnel's ActionEvent and publishes the correlated
+    result envelope. Execution uses the real MuJoCo executor; the outcome
+    (success/failure/silent) is selectable per test."""
+
+    def __init__(self, port: int, outcome: str = "success"):
+        self.outcome = outcome
+        config = zenoh.Config.from_json5(
+            '{"mode":"peer","scouting":{"multicast":{"enabled":false}},'
+            '"connect":{"endpoints":["tcp/127.0.0.1:" + str(port) + "]}}'
+        )
+        self.session = zenoh.open(config)
+        self._lock = threading.Lock()
+        self.executed_actions: list[dict] = []
+        self.subscriber = self.session.declare_subscriber(
+            ACTION_TOPIC, self._on_action
+        )
+        self.publisher = self.session.declare_publisher(RESULT_TOPIC)
+        self.executor = None
+
+    def _on_action(self, sample) -> None:
+        event = json.loads(bytes(sample.payload.to_bytes()))
+        with self._lock:
+            self.executed_actions.append(event)
+        action_id = event.get("action_id") or (event.get("payload") or {}).get("action_id")
+        params = (event.get("payload") or {}).get("params") or {}
+        skill_id = event.get("skill_id") or (event.get("payload") or {}).get("skill")
+        if self.outcome == "silent":
+            return
+        if self.executor is None:
+            from simulator import MuJoCoSimulator
+            self.executor = MuJoCoSimulator()
+        res = self.executor.open_door(params)
+        if self.outcome == "failure":
+            res = type(res)(False, "reviewer-forced-failure", res.metrics)
+        result = {
+            "action_id": action_id,
+            "robot_id": event.get("robot_id"),
+            "skill_id": event.get("skill_id"),
+            "params_hash": event.get("params_hash"),
+            "idempotency_key": event.get("idempotency_key"),
+            "status": "success" if res.success else "failure",
+            "error_code": "" if res.success else res.reason,
+            "result": {"message": res.message, "metrics": res.metrics},
+        }
+        self.publisher.put(json.dumps(result).encode("utf-8"))
+
+    def close(self) -> None:
+        try:
+            self.subscriber.undeclare()
+            self.publisher.undeclare()
+            self.session.close()
+        except Exception:
+            pass
+
+
+class DoorPaymentGateTests(unittest.TestCase):
+    def test_websocket_reader_reassembles_continuation_frames(self) -> None:
+        reader, writer = socket.socketpair()
+        try:
+            writer.sendall(
+                _server_frame(b'{"id":"paid-1",', opcode=1, final=False)
+                + _server_frame(b'"status":202}', opcode=0, final=True)
+            )
+            opcode, payload = _TunnelConnection(reader)._read_message()
+            self.assertEqual(opcode, 1)
+            self.assertEqual(json.loads(payload), {"id": "paid-1", "status": 202})
+        finally:
+            reader.close()
+            writer.close()
+
+    def _start_stack(self, outcome: str = "success"):
+        proxy = LocalFabricProxy()
+        facilitator, facilitator_thread = start_facilitator()
+        observer = ActionBoundaryObserver(
+            action_topic=ACTION_TOPIC, port=ZENOH_TEST_PORT
+        )
+        simulator = SimulatorSide(port=ZENOH_TEST_PORT, outcome=outcome)
+        proxy.start()
+        return proxy, facilitator, facilitator_thread, observer, simulator
+
+    def _write_configs(self, temp_dir: Path) -> tuple[Path, Path]:
+        config_path = temp_dir / "tunnel.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "robot_id": ROBOT_ID,
+                    "evm_payee_address": PAYEE,
+                    "price": f"${PRICE}",
+                    "network": NETWORK,
+                }
+            ),
+            encoding="utf-8",
+        )
+        zenoh_config_path = temp_dir / "zenoh.json5"
+        zenoh_config_path.write_text(
+            json.dumps(
+                {
+                    "mode": "peer",
+                    "scouting": {"multicast": {"enabled": False}},
+                    "connect": {
+                        "endpoints": [f"tcp/127.0.0.1:{ZENOH_TEST_PORT}"]
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return config_path, zenoh_config_path
+
+    def _start_tunnel(self, tunnel_binary, config_path, temp_dir, proxy, facilitator):
+        child_env = os.environ.copy()
+        child_env.update(
+            {
+                "PROXY_WS_URL": f"ws://127.0.0.1:{proxy.port}/ws",
+                "FACILITATOR_URL": f"http://127.0.0.1:{facilitator.server_address[1]}",
+                "AIP_ENABLED": "false",
+                "ZENOH_CONFIG": str(temp_dir / "zenoh.json5"),
+                "SKILL_CATALOG_PATH": str(SKILL_CATALOG),
+                "ALLOWED_ACTIONS": ALLOWED_ACTIONS,
+                "MAX_ACTION_DURATION_SECONDS": "30",
+                "EXECUTION_TIMEOUT_SECONDS": EXECUTION_TIMEOUT_SECONDS,
+                "PYTHONPATH": BRIDGE_PYTHONPATH,
+            }
+        )
+        tunnel = subprocess.Popen(
+            [tunnel_binary, "--config", str(config_path)],
+            cwd=ROOT,
+            env=child_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+        )
+        return tunnel
+
+    def _teardown(self, proxy, facilitator, facilitator_thread, observer, simulator, tunnel):
+        if simulator is not None:
+            simulator.close()
+        if observer is not None:
+            observer.close()
+        if tunnel is not None and tunnel.poll() is None:
+            tunnel.terminate()
+            try:
+                tunnel.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                tunnel.kill()
+        proxy.close()
+        facilitator.shutdown()
+        facilitator.server_close()
+        facilitator_thread.join(timeout=5)
+
+    def _action_url(self, proxy) -> str:
+        return f"http://127.0.0.1:{proxy.port}/robots/{ROBOT_ID}/action"
+
+    def _paid_post(self, action_url, unpaid_headers, action_id, params):
+        return http_post(
+            action_url,
+            {
+                "action": "open_door",
+                "robot_id": ROBOT_ID,
+                "action_id": action_id,
+                "idempotency_key": action_id,
+                "params": params,
+            },
+            {"PAYMENT-SIGNATURE": payment_signature_from_402(unpaid_headers)},
+        )
+
+    def _poll_status(self, proxy, action_id, terminal_states, timeout=60) -> dict:
+        deadline = time.monotonic() + timeout
+        last = None
+        while time.monotonic() < deadline:
+            status, _, body = http_get(
+                f"http://127.0.0.1:{proxy.port}/action/{action_id}/status"
+            )
+            if status == 200:
+                last = json.loads(body)
+                if last.get("state") in terminal_states:
+                    return last
+            time.sleep(0.5)
+        raise AssertionError(
+            f"action {action_id} never reached {terminal_states}; last: {last}"
+        )
+
+    def test_unpaid_malformed_and_facilitator_rejected_requests_fail_closed(self) -> None:
+        tunnel_binary = find_tunnel_binary(ROOT)
+        if not tunnel_binary:
+            raise unittest.SkipTest("Build the real Tunnel first with make build")
+
+        proxy = facilitator = facilitator_thread = observer = simulator = None
+        tunnel = None
+        try:
+            proxy, facilitator, facilitator_thread, observer, simulator = self._start_stack()
+            with tempfile.TemporaryDirectory(prefix="door_payment_gate_") as temp_dir:
+                temp_dir = Path(temp_dir)
+                config_path, _ = self._write_configs(temp_dir)
+                tunnel = self._start_tunnel(
+                    tunnel_binary, config_path, temp_dir, proxy, facilitator
+                )
+                self.assertIsNotNone(
+                    proxy.wait_for_connection(15),
+                    "real Tunnel did not connect to the local Fabric proxy",
+                )
+                action_url = self._action_url(proxy)
+
+                robot_status, _, robot_body = http_get(
+                    f"http://127.0.0.1:{proxy.port}/robots/{ROBOT_ID}"
+                )
+                self.assertEqual(robot_status, 200)
+                self.assertEqual(json.loads(robot_body)["robot_id"], ROBOT_ID)
+                skills_status, _, skills_body = http_get(
+                    f"http://127.0.0.1:{proxy.port}/robots/{ROBOT_ID}/skills"
+                )
+                self.assertEqual(skills_status, 200)
+                discovered = json.loads(skills_body)
+                self.assertEqual(
+                    {item["skill_id"] for item in discovered["skills"]},
+                    {"open_door", "stop"},
+                )
+                self.assertTrue(
+                    all(item["price_usdc"] == PRICE for item in discovered["skills"])
+                )
+
+                unpaid_status, unpaid_headers, _ = http_post(
+                    action_url, {"action": "open_door", "robot_id": ROBOT_ID}
+                )
+                self.assertEqual(unpaid_status, 402)
+                self.assertTrue(
+                    "PAYMENT-REQUIRED" in {name.upper() for name in unpaid_headers},
+                    "402 response must carry PAYMENT-REQUIRED",
+                )
+
+                malformed_status, _, _ = http_post(
+                    action_url,
+                    {"action": "open_door", "params": "not-an-object"},
+                )
+                self.assertEqual(malformed_status, 402)
+                self.assertEqual(
+                    FacilitatorHandler.calls,
+                    [],
+                    "unpaid requests must not verify or settle a payment",
+                )
+
+                FacilitatorHandler.verify_response = {
+                    "isValid": False,
+                    "invalidReason": "reviewer-tampered-payment",
+                }
+                tampered_id = f"door-tampered-{uuid.uuid4().hex}"
+                rejected_status, _, _ = self._paid_post(
+                    action_url, unpaid_headers, tampered_id, {}
+                )
+                self.assertEqual(rejected_status, 402)
+                verify_calls = [
+                    path for path, _ in FacilitatorHandler.calls if path == "/verify"
+                ]
+                settle_calls = [
+                    path for path, _ in FacilitatorHandler.calls if path == "/settle"
+                ]
+                self.assertEqual(len(verify_calls), 1)
+                self.assertEqual(settle_calls, [])
+                self.assertFalse(
+                    observer.action_received.wait(2),
+                    "an isValid:false payment must not publish an ActionEvent",
+                )
+                self.assertEqual(
+                    observer.snapshot(),
+                    (0, 0),
+                    "payment rejection must emit zero ActionEvents",
+                )
+                print("[DOOR DISCOVERY] robot + skills + price: OK")
+                print("[DOOR PAYMENT GATE] unpaid/malformed/isValid:false -> HTTP 402, zero ActionEvents")
+        finally:
+            self._teardown(proxy, facilitator, facilitator_thread, observer, simulator, tunnel)
+
+    def test_paid_action_publishes_and_settles(self) -> None:
+        tunnel_binary = find_tunnel_binary(ROOT)
+        if not tunnel_binary:
+            raise unittest.SkipTest("Build the real Tunnel first with make build")
+
+        proxy = facilitator = facilitator_thread = observer = simulator = None
+        tunnel = None
+        try:
+            proxy, facilitator, facilitator_thread, observer, simulator = self._start_stack(outcome="success")
+            with tempfile.TemporaryDirectory(prefix="door_paid_") as temp_dir:
+                temp_dir = Path(temp_dir)
+                config_path, _ = self._write_configs(temp_dir)
+                tunnel = self._start_tunnel(
+                    tunnel_binary, config_path, temp_dir, proxy, facilitator
+                )
+                self.assertIsNotNone(
+                    proxy.wait_for_connection(15),
+                    "real Tunnel did not connect to the local Fabric proxy",
+                )
+                action_url = self._action_url(proxy)
+
+                unpaid_status, unpaid_headers, _ = http_post(
+                    action_url, {"action": "open_door", "robot_id": ROBOT_ID}
+                )
+                self.assertEqual(unpaid_status, 402)
+
+                paid_id = f"door-paid-{uuid.uuid4().hex}"
+                paid_status, _, _ = self._paid_post(
+                    action_url, unpaid_headers, paid_id, {}
+                )
+                self.assertEqual(paid_status, 202, "verified payment -> 202 accepted")
+
+                self.assertTrue(
+                    observer.action_received.wait(10),
+                    "a verified payment must publish an ActionEvent",
+                )
+                actions, executable = observer.snapshot()
+                self.assertGreaterEqual(executable, 1)
+                self.assertTrue(
+                    any(a.get("action_id") == paid_id for a in actions),
+                    "ActionEvent must be correlated by action_id",
+                )
+
+                status = self._poll_status(
+                    proxy, paid_id, {"succeeded", "failed", "settlement_failed", "timeout"}
+                )
+                self.assertEqual(status["state"], "succeeded")
+                self.assertTrue(status.get("settled"), "success must settle")
+                settle_calls = [
+                    path for path, _ in FacilitatorHandler.calls if path == "/settle"
+                ]
+                self.assertGreaterEqual(len(settle_calls), 1)
+                print("[DOOR PAID] verified payment -> ActionEvent -> correlated result -> settle: OK")
+        finally:
+            self._teardown(proxy, facilitator, facilitator_thread, observer, simulator, tunnel)
+
+    def test_failed_execution_does_not_settle(self) -> None:
+        tunnel_binary = find_tunnel_binary(ROOT)
+        if not tunnel_binary:
+            raise unittest.SkipTest("Build the real Tunnel first with make build")
+
+        proxy = facilitator = facilitator_thread = observer = simulator = None
+        tunnel = None
+        try:
+            proxy, facilitator, facilitator_thread, observer, simulator = self._start_stack(outcome="failure")
+            with tempfile.TemporaryDirectory(prefix="door_fail_") as temp_dir:
+                temp_dir = Path(temp_dir)
+                config_path, _ = self._write_configs(temp_dir)
+                tunnel = self._start_tunnel(
+                    tunnel_binary, config_path, temp_dir, proxy, facilitator
+                )
+                self.assertIsNotNone(proxy.wait_for_connection(15))
+                action_url = self._action_url(proxy)
+
+                unpaid_status, unpaid_headers, _ = http_post(
+                    action_url, {"action": "open_door", "robot_id": ROBOT_ID}
+                )
+                self.assertEqual(unpaid_status, 402)
+
+                failed_id = f"door-fail-{uuid.uuid4().hex}"
+                paid_status, _, _ = self._paid_post(
+                    action_url, unpaid_headers, failed_id, {}
+                )
+                self.assertEqual(paid_status, 202)
+
+                status = self._poll_status(
+                    proxy, failed_id, {"failed", "succeeded", "settlement_failed", "timeout"}
+                )
+                self.assertEqual(status["state"], "failed")
+                self.assertFalse(status.get("settled"), "failed execution must NOT settle")
+                settle_calls = [
+                    path for path, _ in FacilitatorHandler.calls if path == "/settle"
+                ]
+                self.assertEqual(settle_calls, [], "failure path must never call /settle")
+                print("[DOOR FAILURE] failed execution -> no settlement: OK")
+        finally:
+            self._teardown(proxy, facilitator, facilitator_thread, observer, simulator, tunnel)
+
+    def test_timeout_does_not_settle(self) -> None:
+        tunnel_binary = find_tunnel_binary(ROOT)
+        if not tunnel_binary:
+            raise unittest.SkipTest("Build the real Tunnel first with make build")
+
+        proxy = facilitator = facilitator_thread = observer = simulator = None
+        tunnel = None
+        try:
+            proxy, facilitator, facilitator_thread, observer, simulator = self._start_stack(outcome="silent")
+            with tempfile.TemporaryDirectory(prefix="door_timeout_") as temp_dir:
+                temp_dir = Path(temp_dir)
+                config_path, _ = self._write_configs(temp_dir)
+                tunnel = self._start_tunnel(
+                    tunnel_binary, config_path, temp_dir, proxy, facilitator
+                )
+                self.assertIsNotNone(proxy.wait_for_connection(15))
+                action_url = self._action_url(proxy)
+
+                unpaid_status, unpaid_headers, _ = http_post(
+                    action_url, {"action": "open_door", "robot_id": ROBOT_ID}
+                )
+                self.assertEqual(unpaid_status, 402)
+
+                timeout_id = f"door-timeout-{uuid.uuid4().hex}"
+                paid_status, _, _ = self._paid_post(
+                    action_url, unpaid_headers, timeout_id, {}
+                )
+                self.assertEqual(paid_status, 202)
+
+                status = self._poll_status(
+                    proxy, timeout_id, {"timeout", "failed", "succeeded", "settlement_failed"},
+                    timeout=45,
+                )
+                self.assertEqual(status["state"], "timeout")
+                self.assertFalse(status.get("settled"), "timeout must NOT settle")
+                settle_calls = [
+                    path for path, _ in FacilitatorHandler.calls if path == "/settle"
+                ]
+                self.assertEqual(settle_calls, [], "timeout path must never call /settle")
+                print("[DOOR TIMEOUT] no simulator result -> timeout -> no settlement: OK")
+        finally:
+            self._teardown(proxy, facilitator, facilitator_thread, observer, simulator, tunnel)
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main(verbosity=2)
