@@ -1,0 +1,80 @@
+name: fetch-arm-001 CI
+
+# RoboPay Tier-1 Pay-to-Actuate skill CI for fetch-arm-001 (fetch-mobile-pick).
+#
+# Proves on every PR:
+#   1. The Pay-to-Actuate contract end-to-end (402 challenge, async accept,
+#      params-hash, expiry, idempotency, replay protection) -- test_bridge.py.
+#   2. The skill actually WORKS in physics: test_bridge.py drives the real
+#      headless MuJoCo simulator and asserts the task succeeds (cube lifted /
+#      sorted / pushed), so a "documentation-only" submission turns CI red.
+#   3. The payment-policy and robot.profile YAMLs are consumed by test_bridge.py;
+#      no secrets are committed to the repo (asserted by the bridge's own tests).
+#   4. An independent headless simulation proof re-runs the nominal scene and
+#      prints the success metrics as extra, non-blocking evidence.
+#
+# No repository secrets are required: the bridge defaults to mock settlement.
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+        include:
+          - python-version: "3.11"
+            continue-on-error: true
+    defaults:
+      run:
+        working-directory: registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1/bridge/requirements.txt
+
+      - name: Install system libraries (MuJoCo)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             libgl1 libglib2.0-0 libgomp1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # The correct transport pin is `eclipse-zenoh>=1.0.0` (installable on
+          # PyPI; bare `zenoh` stops at 0.4.0 and is unrelated). Strip only a
+          # broken bare `zenoh` pin; never touch `eclipse-zenoh`.
+          ( for f in requirements.txt bridge/requirements.txt tests/requirements.txt; do [ -f "$f" ] && sed -i '/^[[:space:]]*zenoh[[:space:]<>=-]/d' "$f"; done ) || true
+          pip install -r bridge/requirements.txt -r tests/requirements.txt
+
+      - name: Run pytest (Pay-to-Actuate contract + headless MuJoCo sim)
+        run: python -m pytest tests/ -q
+
+      - name: Headless simulation proof (independent, extra evidence)
+        continue-on-error: true
+        run: |
+          cd bridge
+          python - <<'PY'
+          from simulator import MuJoCoSimulator
+          sim = MuJoCoSimulator()
+          r = sim.fetch_mobile_pick({})
+          print("SIM RESULT:", r.success, r.reason)
+          print("METRICS:", r.metrics)
+          assert r.success, r.reason
+          PY
+      - name: Verify x402 settlement tx hashes on Base Sepolia
+        run: timeout 120 python "$GITHUB_WORKSPACE/verify_settlement.py"
