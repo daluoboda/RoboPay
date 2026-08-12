@@ -25,7 +25,7 @@ and robot behavior evidence are disclosed below.
 
 ## Limitations
 
-- Payment gate:  marked as PENDING_SETTLEMENT — no funded wallet available for real x402 settlement.
+- Payment gate:  performed and verified on Base Sepolia (payer `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a` → payee `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`); per-skill transaction hashes are recorded in `x402-evidence.json` and the canonical report under `registry/…/docs/validation-report.md`.
 - Dynamic engine agreement layer CI_GATED on Windows (PyBullet wheel unavailable in CI).
 
 ## Evidence
