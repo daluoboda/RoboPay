@@ -1,0 +1,50 @@
+{
+  "schema": "robopay.metrics/v1",
+  "skill": "fetch",
+  "robot_id": "fetch-arm-001",
+  "skill_id": "fetch_object",
+  "generated_by": "real test execution + real on-chain evidence (no fabricated values)",
+  "onchain_settlement": {
+    "primary": {
+      "network": "base-sepolia",
+      "asset": "USDC",
+      "real_tx_count": 0,
+      "txs": [],
+      "explorer_base": "https://sepolia.basescan.org/tx/",
+      "payee": "__FILL_WITH_REAL_PAYEE__",
+      "payer": "__FILL_WITH_REAL_PAYER__"
+    },
+    "auxiliary_pi": {
+      "network": null,
+      "real_tx_count": 0,
+      "txs": []
+    },
+    "note": "Primary proof = Base-Sepolia USDC txs. Replace placeholders with real transaction data."
+  },
+  "payment_gate": {
+    "unpaid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "TestUnpaidRejected::test_unpaid_is_402_no_execution"
+      ]
+    },
+    "invalid_rejected": {
+      "status": "PASS",
+      "tests": [
+        "TestInvalidRejected::test_invalid_is_402_no_execution"
+      ]
+    },
+    "paid_success": {
+      "status": "PENDING_SETTLEMENT",
+      "note": "Waiting for real x402 settlement transaction on Base Sepolia."
+    }
+  },
+  "sim_to_sim": {
+    "status": "PASS",
+    "engines": [
+      "mujoco",
+      "pybullet"
+    ],
+    "note": "See sim_to_sim_validation.json for details."
+  }
+}
