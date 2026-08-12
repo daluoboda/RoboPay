@@ -75,3 +75,34 @@ jobs:
           PY
       - name: Verify x402 settlement tx hashes on Base Sepolia
         run: timeout 120 python "$GITHUB_WORKSPACE/verify_settlement.py"
+
+  tunnel-integration:
+    name: real Go Tunnel x402 payment gate
+    runs-on: ubuntu-22.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the real Go Tunnel
+        run: |
+          make build
+          ls -la bin/tunnel
+      - name: Install bridge deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r registry/vendors/laok/fetch-001/laok.fetch-001.fetch-mobile-pick.v1/bridge/requirements.txt
+          python -m pip install "x402>=0.2.0" eth-account web3 httpx
+      - name: Prove the x402 payment gate through the real Tunnel
+        env:
+          PYTHONPATH: ${{ github.workspace }}/registry/vendors/laok/fetch-001/laok.fetch-001.fetch-mobile-pick.v1/bridge
+          TUNNEL_BIN: ${{ github.workspace }}/bin/tunnel
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.zenoh-c/lib
+          FETCH_PAYMENT_GATE_ZENOH_PORT: "7447"
+        run: |
+          cd registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1/tests
+          python test_fetch_payment_gate.py -v
