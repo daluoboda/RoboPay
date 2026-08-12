@@ -117,3 +117,22 @@ on-chain transaction hash is disclosed as the cross-reference.
   action/result contract is still exercised and testable offline.
 - `push-arm-001` is a simulator; it satisfies the Tier 1 "simulator skill
   execution" track and does not require physical hardware.
+
+<!-- ONCHAIN_MAP -->
+## On-chain settlement verification
+
+This skill was settled over x402 on **Base Sepolia** (testnet). A reviewer can verify every transaction independently on the block explorer.
+
+- **Network:** Base Sepolia (`base-sepolia`)
+- **Payer (our wallet):** `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a`
+- **Payee (RoboPay settlement address):** `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`
+- **Asset / amount:** USDC, 0.1 per settled action (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)
+- **How it is verified:** `verify_settlement.py` reads ERC-20 Transfer events and asserts `topic[1] == payer` and `topic[2] == payee`; combined with sim2sim parity (MuJoCo ↔ PyBullet) in CI.
+
+Settlement transactions for **push-arm-001** (click to view on-chain):
+  - [0x63505c1b9dde2b4fd83cc89862cb18bcec11dceef6fbb5b8c1fc91cdf2dbc6ee](https://sepolia.basescan.org/tx/0x63505c1b9dde2b4fd83cc89862cb18bcec11dceef6fbb5b8c1fc91cdf2dbc6ee)
+  - [0x3da64810dbcdf751cd3b7e7143e3529cb07082816a93921993fb9de2c359f3e8](https://sepolia.basescan.org/tx/0x3da64810dbcdf751cd3b7e7143e3529cb07082816a93921993fb9de2c359f3e8)
+  - [0x85497dd15254334e158b9ee56c32e92d60f803db1763f8823eefd5ed45b6c333](https://sepolia.basescan.org/tx/0x85497dd15254334e158b9ee56c32e92d60f803db1763f8823eefd5ed45b6c333)
+  - [0x18f9028927fdcc30ab903eb2c9c105116f0ddd19ca2c733638a93492ef56536a](https://sepolia.basescan.org/tx/0x18f9028927fdcc30ab903eb2c9c105116f0ddd19ca2c733638a93492ef56536a)
+
+**Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
