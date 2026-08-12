@@ -118,3 +118,30 @@ on-chain transaction hash is disclosed as the cross-reference.
   action/result contract is still exercised and testable offline.
 - `stack-arm-001` is a simulator; it satisfies the Tier 1 "simulator skill
   execution" track and does not require physical hardware.
+
+<!-- ONCHAIN_MAP -->
+## On-chain settlement verification
+
+This skill was settled over x402 on **Base Sepolia** (testnet). A reviewer can verify every transaction independently on the block explorer.
+
+- **Network:** Base Sepolia (`base-sepolia`)
+- **Payer (our wallet):** `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a`
+- **Payee (RoboPay settlement address):** `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`
+- **Asset / amount:** USDC, 0.1 per settled action (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)
+- **How it is verified:** `verify_settlement.py` reads ERC-20 Transfer events and asserts `topic[1] == payer` and `topic[2] == payee`; combined with sim2sim parity (MuJoCo ↔ PyBullet) in CI.
+
+Settlement transactions for **stack-arm-001** (click to view on-chain):
+  - [0xc6f3d2dc89c0a5ef76955ba8faabc0f946ec3d9bb8ecee5b7a536205b9920538](https://sepolia.basescan.org/tx/0xc6f3d2dc89c0a5ef76955ba8faabc0f946ec3d9bb8ecee5b7a536205b9920538)
+  - [0x4785c20aa56e28088eb8c72d7e28920934eb7c6ceb7e2d1b206b4d6889312b64](https://sepolia.basescan.org/tx/0x4785c20aa56e28088eb8c72d7e28920934eb7c6ceb7e2d1b206b4d6889312b64)
+  - [0x5e3a972b2236d55da17d57a67d71cafc972099c498eef609f38a278d296ddfca](https://sepolia.basescan.org/tx/0x5e3a972b2236d55da17d57a67d71cafc972099c498eef609f38a278d296ddfca)
+  - [0x67f72c6ad2776e0a26ed8bb60e49f1c0c832ca34f65e5efe9ac6190e1d55acc2](https://sepolia.basescan.org/tx/0x67f72c6ad2776e0a26ed8bb60e49f1c0c832ca34f65e5efe9ac6190e1d55acc2)
+  - [0xda0de4a66c5d82a410473ec669e1d91e9216fc4002542f1eab6efc3e992ef7b5](https://sepolia.basescan.org/tx/0xda0de4a66c5d82a410473ec669e1d91e9216fc4002542f1eab6efc3e992ef7b5)
+  - [0x8b909f7ae5909671d9566a366bccbf8b270a1c5e0b15e6a93fd8422f2206a101](https://sepolia.basescan.org/tx/0x8b909f7ae5909671d9566a366bccbf8b270a1c5e0b15e6a93fd8422f2206a101)
+  - [0x93532a6b6accecbc4c7fc674dccac5f09d237343a9fff87482caceb3f0bb994f](https://sepolia.basescan.org/tx/0x93532a6b6accecbc4c7fc674dccac5f09d237343a9fff87482caceb3f0bb994f)
+  - [0xf50f858881373b964b05ca461180866077de57cd32497d2023311bf3a7712d2f](https://sepolia.basescan.org/tx/0xf50f858881373b964b05ca461180866077de57cd32497d2023311bf3a7712d2f)
+  - [0xb2546bb528289e14cabf593c8ee9521e144fbfd2b62c74d807dc1c68a23f792f](https://sepolia.basescan.org/tx/0xb2546bb528289e14cabf593c8ee9521e144fbfd2b62c74d807dc1c68a23f792f)
+
+Pi Network (testnet) settlement (auxiliary):
+  - `01f2a70e60f15086a5aeb1f85a1e7dc53ce24d84c65845efd749c6f1845d3e7e`
+
+**Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
