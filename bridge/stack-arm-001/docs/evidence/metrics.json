@@ -3,7 +3,7 @@
   "skill": "stack",
   "robot_id": "stack-arm-001",
   "skill_id": "stack_object",
-  "generated_by": "real test execution + real on-chain evidence (no fabricated values)",
+  "generated_by": "real test execution + real on-chain evidence",
   "onchain_settlement": {
     "primary": {
       "network": "base-sepolia",
@@ -11,15 +11,15 @@
       "real_tx_count": 0,
       "txs": [],
       "explorer_base": "https://sepolia.basescan.org/tx/",
-      "payee": "__FILL_WITH_REAL_PAYEE__",
-      "payer": "__FILL_WITH_REAL_PAYER__"
+      "payee": "__FILL__",
+      "payer": "__FILL__"
     },
     "auxiliary_pi": {
       "network": null,
       "real_tx_count": 0,
       "txs": []
     },
-    "note": "Primary proof = Base-Sepolia USDC txs. Replace placeholders with real transaction data."
+    "note": "Waiting for real x402 settlement"
   },
   "payment_gate": {
     "unpaid_rejected": {
@@ -36,7 +36,7 @@
     },
     "paid_success": {
       "status": "PENDING_SETTLEMENT",
-      "note": "Waiting for real x402 settlement transaction on Base Sepolia."
+      "note": "Waiting for real x402 settlement"
     }
   },
   "sim_to_sim": {
@@ -45,6 +45,6 @@
       "mujoco",
       "pybullet"
     ],
-    "note": "See sim_to_sim_validation.json for details."
+    "note": "See sim_to_sim_validation.json"
   }
 }
