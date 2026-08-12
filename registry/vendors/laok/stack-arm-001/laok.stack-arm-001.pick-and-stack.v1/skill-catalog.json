@@ -1,0 +1,16 @@
+[
+  {
+    "skill_id": "stack_arm_pick_and_stack",
+    "description": "RoboPay Tier 1 paid action on stack-arm-001 executed in MuJoCo.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {}
+  },
+  {
+    "skill_id": "stop",
+    "description": "Safely interrupt an active execution and command neutral joint states.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {}
+  }
+]
