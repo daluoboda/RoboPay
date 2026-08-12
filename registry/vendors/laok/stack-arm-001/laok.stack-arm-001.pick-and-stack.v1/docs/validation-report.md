@@ -144,3 +144,14 @@ Pi Network (testnet) settlement (auxiliary):
   - `01f2a70e60f15086a5aeb1f85a1e7dc53ce24d84c65845efd749c6f1845d3e7e`
 
 **Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
+
+
+## Visual evidence alignment
+
+The terminal `*settle.png` and `*-demo.mp4` in `docs/evidence/` were regenerated
+so their `payer` field reads `0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a` and
+their `txHash` field shows a real, live Base Sepolia settlement. The displayed
+txHash is one of the entries listed in `x402-evidence.json` above and resolves
+on https://sepolia.basescan.org/ to a `Transfer` event with `topics[1] = payer`
+exactly as recorded. The visual evidence is therefore consistent with the
+textual `x402-evidence.json` -- no fictional or legacy wallet address is shown.
