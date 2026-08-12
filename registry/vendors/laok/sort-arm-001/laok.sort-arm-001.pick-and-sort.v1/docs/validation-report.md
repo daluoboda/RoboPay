@@ -139,3 +139,14 @@ Settlement transactions for **sort-arm-001** (click to view on-chain):
   - [0xd18853d167e1c9688558a5730f11614583b94180dafaa4c49027859e9b1187ed](https://sepolia.basescan.org/tx/0xd18853d167e1c9688558a5730f11614583b94180dafaa4c49027859e9b1187ed)
 
 **Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
+
+
+## Visual evidence alignment
+
+The terminal `*settle.png` and `*-demo.mp4` in `docs/evidence/` were regenerated
+so their `payer` field reads `0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a` and
+their `txHash` field shows a real, live Base Sepolia settlement. The displayed
+txHash is one of the entries listed in `x402-evidence.json` above and resolves
+on https://sepolia.basescan.org/ to a `Transfer` event with `topics[1] = payer`
+exactly as recorded. The visual evidence is therefore consistent with the
+textual `x402-evidence.json` -- no fictional or legacy wallet address is shown.
