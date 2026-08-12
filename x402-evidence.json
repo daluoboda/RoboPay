@@ -1,5 +1,5 @@
 {
-  "payer": "0xA0723A2dA2bFa349919A467446Fb54569b2f3d13",
+  "payer": "0xf2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
   "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   "network": "base-sepolia",
@@ -23,5 +23,5 @@
   "pi_horizon": "https://api.testnet.minepi.com",
   "pi_payer": "GDRVZMKIN4R4YIH6W4BMMM55ECAEKPFLK6QPWQPBGV23FSH3C333H565",
   "pi_payee": "GDRVZMKIN4R4YIH6W4BMMM55ECAEKPFLK6QPWQPBGV23FSH3C333H565",
-  "updated_at": "2026-08-12T03:26:25.130551+00:00"
+  "updated_at": "2026-08-12T03:45:00Z"
 }
