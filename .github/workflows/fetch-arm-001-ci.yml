@@ -1,6 +1,6 @@
-name: fetch-arm-001 CI
+name: fetch-001 CI
 
-# RoboPay Tier-1 Pay-to-Actuate skill CI for fetch-arm-001 (fetch-mobile-pick).
+# RoboPay Tier-1 Pay-to-Actuate skill CI for fetch-001 (fetch-mobile-pick).
 #
 # Proves on every PR:
 #   1. The Pay-to-Actuate contract end-to-end (402 challenge, async accept,
@@ -36,7 +36,7 @@ jobs:
             continue-on-error: true
     defaults:
       run:
-        working-directory: registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1
+        working-directory: registry/vendors/laok/fetch-001/laok.fetch-001.fetch-mobile-pick.v1
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1/bridge/requirements.txt
+          cache-dependency-path: registry/vendors/laok/fetch-001/laok.fetch-001.fetch-mobile-pick.v1/bridge/requirements.txt
 
       - name: Install system libraries (MuJoCo)
         run: |
