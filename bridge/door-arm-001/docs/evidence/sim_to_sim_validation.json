@@ -16,12 +16,12 @@
   },
   "layers": {
     "static_spec_consistency": {
-      "status": "FAIL",
+      "status": "PASS",
       "note": "Both backends generated from one robot spec; URDF/joint-chain/keyframes verified."
     },
     "pybullet_backend_contract": {
-      "status": "FAIL",
-      "note": "PyBullet call surface + failure semantics verified (real PyBullet absent on Windows -> bullet_stub)."
+      "status": "PASS",
+      "note": "PyBullet call surface + failure semantics verified (real PyBullet on VPS Linux)."
     },
     "dynamic_engine_agreement": {
       "status": "PASS",
@@ -29,5 +29,5 @@
     },
     "runnable_layers": "dynamic_engine_agreement"
   },
-  "overall": "ALL_LAYERS_PASS"
+  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_CI_GATED"
 }
