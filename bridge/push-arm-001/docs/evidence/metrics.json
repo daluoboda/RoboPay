@@ -8,11 +8,15 @@
     "primary": {
       "network": "base-sepolia",
       "asset": "USDC",
-      "real_tx_count": 0,
-      "txs": [],
+      "real_tx_count": 3,
+      "txs": [
+        "0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba",
+        "0x3d9cbff38cc74a836effaae040244b9c06b07b90dac774c8223cc480e296483e",
+        "0x63505c1b9dde2b4fd83cc89862cb18bcec11dceef6fbb5b8c1fc91cdf2dbc6ee"
+      ],
       "explorer_base": "https://sepolia.basescan.org/tx/",
       "payee": "__FILL__",
-      "payer": "__FILL__"
+      "payer": "0xA0723A2dA2bFa349919A467446Fb54569b2f3d13"
     },
     "auxiliary_pi": {
       "network": null,
@@ -35,8 +39,9 @@
       ]
     },
     "paid_success": {
-      "status": "PENDING_SETTLEMENT",
-      "note": "Waiting for real x402 settlement"
+      "status": "PASS_ONCHAIN_ONLY",
+      "note": "3 real Base-Sepolia USDC tx(s) verified",
+      "onchain_tx_count": 3
     }
   },
   "sim_to_sim": {
