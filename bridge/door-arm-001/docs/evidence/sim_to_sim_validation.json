@@ -29,5 +29,5 @@
     },
     "runnable_layers": "dynamic_engine_agreement"
   },
-  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_CI_GATED"
+  "overall": "RUNNABLE_LAYERS_PASS"
 }
