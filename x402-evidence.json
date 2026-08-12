@@ -1,17 +1,15 @@
 {
-  "payer": "0xf2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
+  "payer": "0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a",
   "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   "network": "base-sepolia",
   "asset": "USDC",
   "amount_usdc": 0.1,
   "txs": [
-    "0xc660c41948a326909112c471f9553ddda204a71952e5ca9a5ec2bbc3fe9aaeba",
-    "0x3d9cbff38cc74a836effaae040244b9c06b07b90dac774c8223cc480e296483e",
     "0x63505c1b9dde2b4fd83cc89862cb18bcec11dceef6fbb5b8c1fc91cdf2dbc6ee",
     "0x3da64810dbcdf751cd3b7e7143e3529cb07082816a93921993fb9de2c359f3e8",
     "0x85497dd15254334e158b9ee56c32e92d60f803db1763f8823eefd5ed45b6c333",
     "0x18f9028927fdcc30ab903eb2c9c105116f0ddd19ca2c733638a93492ef56536a"
   ],
-  "updated_at": "2026-08-12T03:45:00Z"
+  "updated_at": "2026-08-12T06:40:30Z"
 }
