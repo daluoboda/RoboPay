@@ -8,6 +8,11 @@ name: fabric-arm-001 bridge CI
 #   3. The YAML profiles are a RUNTIME CONTRACT: test_profiles.py asserts every
 #      number in the 5 YAMLs matches arm_spec.py and the transport layer, so a
 #      drift between "documented" and "running" bridge turns CI red.
+#   4. The real Go Tunnel binary is built (make build) and the x402 payment
+#      gate is exercised through it: unpaid/malformed/facilitator-rejected
+#      requests fail closed with zero ActionEvents, a verified payment
+#      publishes an ActionEvent and settles only after the correlated MuJoCo
+#      result, and failure/timeout paths never settle (test_fabric_payment_gate.py).
 #
 # No repository secrets are required: the bridge defaults to mock settlement,
 # and real-wallet keys are only ever read from environment variables.
@@ -27,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12"]
     defaults:
       run:
         working-directory: bridge/fabric-arm-001
@@ -74,7 +79,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -84,3 +89,34 @@ jobs:
         run: python -m pytest tests/test_profiles.py -q
       - name: Verify x402 settlement tx hashes on Base Sepolia
         run: timeout 120 python "$GITHUB_WORKSPACE/verify_settlement.py"
+
+  tunnel-integration:
+    name: real Go Tunnel x402 payment gate
+    runs-on: ubuntu-22.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the real Go Tunnel
+        run: |
+          make build
+          ls -la bin/tunnel
+      - name: Install bridge deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r bridge/fabric-arm-001/requirements.txt
+          python -m pip install "x402>=0.2.0" eth-account web3 httpx
+      - name: Prove the x402 payment gate through the real Tunnel
+        env:
+          PYTHONPATH: ${{ github.workspace }}/bridge/fabric-arm-001
+          TUNNEL_BIN: ${{ github.workspace }}/bin/tunnel
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.zenoh-c/lib
+          FABRIC_PAYMENT_GATE_ZENOH_PORT: "7447"
+        run: |
+          cd bridge/fabric-arm-001
+          python tests/test_fabric_payment_gate.py -v
