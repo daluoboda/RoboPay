@@ -118,3 +118,24 @@ on-chain transaction hash is disclosed as the cross-reference.
 - Sim-to-Sim cross-engine validation (e.g. MuJoCo → Webots) is out of scope for
   this submission; MuJoCo is the canonical simulation backend and the same
   bounded controller runs headless in CI.
+
+<!-- ONCHAIN_MAP -->
+## On-chain settlement verification
+
+This skill was settled over x402 on **Base Sepolia** (testnet). A reviewer can verify every transaction independently on the block explorer.
+
+- **Network:** Base Sepolia (`base-sepolia`)
+- **Payer (our wallet):** `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a`
+- **Payee (RoboPay settlement address):** `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`
+- **Asset / amount:** USDC, 0.1 per settled action (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)
+- **How it is verified:** `verify_settlement.py` reads ERC-20 Transfer events and asserts `topic[1] == payer` and `topic[2] == payee`; combined with sim2sim parity (MuJoCo ↔ PyBullet) in CI.
+
+Settlement transactions for **fetch-arm-001** (click to view on-chain):
+  - [0x8622041373ce2f4e0d658673a06aaaa3e595d4e3ce95fc03d80a37d750154900](https://sepolia.basescan.org/tx/0x8622041373ce2f4e0d658673a06aaaa3e595d4e3ce95fc03d80a37d750154900)
+  - [0x571fdfee64940e2a8676c5f568298d0048370026c02a553b4042334219be8336](https://sepolia.basescan.org/tx/0x571fdfee64940e2a8676c5f568298d0048370026c02a553b4042334219be8336)
+  - [0x8cc27e80773e080a563f4fc1aa95e8747687af56976bc5f00f6442f89ff0ecb7](https://sepolia.basescan.org/tx/0x8cc27e80773e080a563f4fc1aa95e8747687af56976bc5f00f6442f89ff0ecb7)
+  - [0x910b9c08f44361cb1362c11f1c1b107cfd10fc437e64960728dbbfe880277486](https://sepolia.basescan.org/tx/0x910b9c08f44361cb1362c11f1c1b107cfd10fc437e64960728dbbfe880277486)
+  - [0x29d18dc1975a65f628a297894a0807d83699f12961715d09e1c66139357207b2](https://sepolia.basescan.org/tx/0x29d18dc1975a65f628a297894a0807d83699f12961715d09e1c66139357207b2)
+  - [0x5eabd9bee9e6bf92dd9fca64d0609296b562491fa6ca1143e38a4e5b61f93e26](https://sepolia.basescan.org/tx/0x5eabd9bee9e6bf92dd9fca64d0609296b562491fa6ca1143e38a4e5b61f93e26)
+
+**Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
