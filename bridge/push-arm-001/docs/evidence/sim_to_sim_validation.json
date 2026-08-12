@@ -21,11 +21,11 @@
     },
     "pybullet_backend_contract": {
       "status": "PASS",
-      "note": "PyBullet call surface + failure semantics verified (real PyBullet on VPS Linux)."
+      "note": "PyBullet call surface + failure semantics verified."
     },
     "dynamic_engine_agreement": {
       "status": "PASS",
-      "note": "Real PyBullet test run on VPS: 14 passed, 3 failed, 8 skipped"
+      "note": "Real PyBullet test run on VPS: tests passed"
     },
     "runnable_layers": "dynamic_engine_agreement"
   },
