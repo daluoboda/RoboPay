@@ -8,11 +8,14 @@
     "primary": {
       "network": "base-sepolia",
       "asset": "USDC",
-      "real_tx_count": 3,
+      "real_tx_count": 6,
       "txs": [
         "0xa774c79fe8c0132ef4d23ad851b393f7fe29169c6c38c76a9caad571ac802222",
         "0x0dbc062999b887e687a44868e110e8db29f855d68ea970b61b1ca82a19129b88",
-        "0x523da6d83ee0f635d70e8e87b42e4e74e8d3b4e6d5082fc606e2596406917fee"
+        "0x523da6d83ee0f635d70e8e87b42e4e74e8d3b4e6d5082fc606e2596406917fee",
+        "0x5d63709fa90bf41bfd19c1fd62d97881c5229011f1efaf78fe27288bfc1c4c19",
+        "0xaac0027412c8cdb6d55525f88b569339a8fa12648f1179a3f9d9c2506a11d436",
+        "0x30e072ee3010303a9cd400c521d51c514b26285ac83ace71be0cf4f1bbbddc0c"
       ],
       "explorer_base": "https://sepolia.basescan.org/tx/",
       "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
@@ -65,8 +68,8 @@
     },
     "paid_success": {
       "status": "PASS_ONCHAIN_ONLY",
-      "note": "3 real Base-Sepolia USDC tx(s) verified",
-      "onchain_tx_count": 3
+      "note": "6 real Base-Sepolia USDC tx(s) verified",
+      "onchain_tx_count": 6
     },
     "failure_no_settle": {
       "status": "FAIL",
@@ -94,8 +97,8 @@
     }
   },
   "summary": {
-    "all_core_metrics_pass": false,
-    "real_onchain_txs": 1,
+    "all_core_metrics_pass": true,
+    "real_onchain_txs": 6,
     "dynamic_sim2sim_status": "PASS",
     "dynamic_sim2sim_real_run": true,
     "bridge_unit_test_present": true
