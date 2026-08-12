@@ -139,7 +139,6 @@ Settlement transactions for **stack-arm-001** (click to view on-chain):
   - [0x8b909f7ae5909671d9566a366bccbf8b270a1c5e0b15e6a93fd8422f2206a101](https://sepolia.basescan.org/tx/0x8b909f7ae5909671d9566a366bccbf8b270a1c5e0b15e6a93fd8422f2206a101)
   - [0x93532a6b6accecbc4c7fc674dccac5f09d237343a9fff87482caceb3f0bb994f](https://sepolia.basescan.org/tx/0x93532a6b6accecbc4c7fc674dccac5f09d237343a9fff87482caceb3f0bb994f)
   - [0xf50f858881373b964b05ca461180866077de57cd32497d2023311bf3a7712d2f](https://sepolia.basescan.org/tx/0xf50f858881373b964b05ca461180866077de57cd32497d2023311bf3a7712d2f)
-  - [0xb2546bb528289e14cabf593c8ee9521e144fbfd2b62c74d807dc1c68a23f792f](https://sepolia.basescan.org/tx/0xb2546bb528289e14cabf593c8ee9521e144fbfd2b62c74d807dc1c68a23f792f)
 
 Pi Network (testnet) settlement (auxiliary):
   - `01f2a70e60f15086a5aeb1f85a1e7dc53ce24d84c65845efd749c6f1845d3e7e`
