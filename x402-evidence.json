@@ -1,12 +1,11 @@
 {
-  "payer": "0xf2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
+  "payer": "0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a",
   "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   "network": "base-sepolia",
   "asset": "USDC",
   "amount_usdc": 0.1,
   "txs": [
-    "0xef567bf8a100cbb3fe8745606f13576d76e81e8fc64365e78ed57496f4321bcb",
     "0x8622041373ce2f4e0d658673a06aaaa3e595d4e3ce95fc03d80a37d750154900",
     "0x571fdfee64940e2a8676c5f568298d0048370026c02a553b4042334219be8336",
     "0x8cc27e80773e080a563f4fc1aa95e8747687af56976bc5f00f6442f89ff0ecb7",
@@ -19,5 +18,5 @@
   "pi_horizon": "https://api.testnet.minepi.com",
   "pi_payer": "GDRVZMKIN4R4YIH6W4BMMM55ECAEKPFLK6QPWQPBGV23FSH3C333H565",
   "pi_payee": "GDRVZMKIN4R4YIH6W4BMMM55ECAEKPFLK6QPWQPBGV23FSH3C333H565",
-  "updated_at": "2026-08-12T03:45:00Z"
+  "updated_at": "2026-08-12T06:40:34Z"
 }
