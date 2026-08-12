@@ -30,10 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
-        include:
-          - python-version: "3.11"
-            continue-on-error: true
+        python-version: ["3.11"]
     defaults:
       run:
         working-directory: registry/vendors/laok/stack-arm-001/laok.stack-arm-001.pick-and-stack.v1
