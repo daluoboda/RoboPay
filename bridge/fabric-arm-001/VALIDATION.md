@@ -240,3 +240,25 @@ why they were replaced.
   part of the offline-reproducible demo.
 * **Screen recording** — the demo already emits the full trace to stdout; a
   capture will be attached to the PR description.
+
+<!-- ONCHAIN_MAP -->
+## On-chain settlement verification
+
+This skill was settled over x402 on **Base Sepolia** (testnet). A reviewer can verify every transaction independently on the block explorer.
+
+- **Network:** Base Sepolia (`base-sepolia`)
+- **Payer (our wallet):** `0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a`
+- **Payee (RoboPay settlement address):** `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`
+- **Asset / amount:** USDC, 0.1 per settled action (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)
+- **How it is verified:** `verify_settlement.py` reads ERC-20 Transfer events and asserts `topic[1] == payer` and `topic[2] == payee`; combined with sim2sim parity (MuJoCo ↔ PyBullet) in CI.
+
+Settlement transactions for **fabric-arm-001** (click to view on-chain):
+  - [0x444a3da9b5ed968b2b55f6d83987620304490383a46a85a8cf443b2f23947e82](https://sepolia.basescan.org/tx/0x444a3da9b5ed968b2b55f6d83987620304490383a46a85a8cf443b2f23947e82)
+  - [0x1dc3dad5889628bdc388dab5bfe74efed3a7d2fa078596a09efef2f81a4505f7](https://sepolia.basescan.org/tx/0x1dc3dad5889628bdc388dab5bfe74efed3a7d2fa078596a09efef2f81a4505f7)
+  - [0x7ee65bd9adb965d62433a5973a9bb5d7411e519ab2bdd23397050a82eb002387](https://sepolia.basescan.org/tx/0x7ee65bd9adb965d62433a5973a9bb5d7411e519ab2bdd23397050a82eb002387)
+  - [0xa42302de6382bf2368126f62e7b5f2f95f2f71eb2091c1792379d8e0b3218d75](https://sepolia.basescan.org/tx/0xa42302de6382bf2368126f62e7b5f2f95f2f71eb2091c1792379d8e0b3218d75)
+  - [0x7304a7cd7f157efc08b8a9425354946cd6c1b104035303ec7440010cb700b7eb](https://sepolia.basescan.org/tx/0x7304a7cd7f157efc08b8a9425354946cd6c1b104035303ec7440010cb700b7eb)
+  - [0xdc0f5d83664b22bc11049a39f6fd2a7dd8d7553446bc1f621e0dd7b837339c79](https://sepolia.basescan.org/tx/0xdc0f5d83664b22bc11049a39f6fd2a7dd8d7553446bc1f621e0dd7b837339c79)
+  - [0x2517ac9db8d6b84815ef2898e9263fbb7bdb0ce648020ad0a4cbdc96124f8efb](https://sepolia.basescan.org/tx/0x2517ac9db8d6b84815ef2898e9263fbb7bdb0ce648020ad0a4cbdc96124f8efb)
+
+**Result:** every payer/tx hash above matches on-chain Transfer records → `PASS_ONCHAIN_ONLY`.
