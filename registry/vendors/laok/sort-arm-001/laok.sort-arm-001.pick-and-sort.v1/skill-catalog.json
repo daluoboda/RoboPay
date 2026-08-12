@@ -1,0 +1,24 @@
+[
+  {
+    "skill_id": "sort_arm_pick_and_sort",
+    "description": "RoboPay Tier 1 paid action on sort-arm-001 executed in MuJoCo.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {
+      "target_bin": {
+        "type": "string",
+        "values": [
+          "left",
+          "right"
+        ]
+      }
+    }
+  },
+  {
+    "skill_id": "stop",
+    "description": "Safely interrupt an active execution and command neutral joint states.",
+    "payment_required": true,
+    "price_usdc": "0.10",
+    "params": {}
+  }
+]
