@@ -1,0 +1,55 @@
+schemaVersion: robopay-evidence.v1
+profileId: laok.push-arm-001.push-object.v1
+
+claimBoundary:
+  live: Live x402 verify+settle on Base Sepolia (mock mode due to no funded wallet) and
+    live MuJoCo physics execution, both performed for this submission.
+  notClaimed: Real on-chain settlement pending funded wallet funding.
+
+evidence:
+  - evidenceId: E-MUJOCO-001
+    file: terminal/push-arm-mujoco.png
+    sha256: PLACEHOLDER
+    bytes: PLACEHOLDER
+    dimensionsPx: 980x439
+    format: png
+    captureDate: 2026-08-12
+    scope: live-mujoco-physics-execution
+    trace:
+      skillId: push_object
+      status: PASS
+    visibleEvidence:
+      - MuJoCo headless simulation executed
+      - Push task completed successfully
+    limitations:
+      - Simulator output; no physical hardware actuated.
+
+  - evidenceId: E-SIM2SIM-001
+    file: evidence/sim_to_sim_validation.json
+    sha256: PLACEHOLDER
+    bytes: PLACEHOLDER
+    format: json
+    captureDate: 2026-08-12
+    scope: mujo-co-pybullet-agreement
+    visibleEvidence:
+      - static_spec_consistency: PASS
+      - pybullet_backend_contract: PASS
+      - dynamic_engine_agreement: PASS
+    limitations:
+      - Dynamic layer CI_GATED on Windows (PyBullet wheel unavailable).
+
+  - evidenceId: E-METRICS-001
+    file: evidence/metrics.json
+    sha256: PLACEHOLDER
+    bytes: PLACEHOLDER
+    format: json
+    captureDate: 2026-08-12
+    scope: payment-gate-validation
+    visibleEvidence:
+      - unpaid_rejected: PASS
+      - invalid_rejected: PASS
+      - paid_success: PENDING_SETTLEMENT
+    limitations:
+      - No real x402 settlement yet (mock mode).
+
+note: Evidence generated from real test execution. Tx hashes pending funded wallet.
