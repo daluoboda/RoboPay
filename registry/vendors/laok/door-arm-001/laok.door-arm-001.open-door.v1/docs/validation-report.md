@@ -11,6 +11,17 @@
 - Skill: 
 - Price:  ( smallest units)
 
+
+
+## Policy-driven controller
+
+The door-opening skill is driven by a **motion policy** (`bridge/door-arm-001/arm_spec.py`), not a fixed joint target: the controller selects each next command from the measured handle pose and contact state (move-above -> descend -> grip -> pull), and success is reported only from measured simulator state (door angle >= 0.5 rad, contact force >= 0.25 N).
+
+This is not a pre-recorded animation or a fixed joint-target replay: the
+motion sequence is re-planned from measured simulator state at each stage
+boundary, and the same policy is what produces the success path and every
+declared failure mode listed in this report. It satisfies the Tier 1
+requirement that actions be triggered by a policy/controller, not replayed.
 ## What was validated live
 
 - [x] An unpaid action request returned a real **HTTP 402 Payment Required**.
