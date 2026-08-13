@@ -1,0 +1,40 @@
+# unitree-g1 skills
+schemaVersion: robot-skills.v1
+
+profileId: unitree.unitree-g1.mujoco-sim.v1
+
+skills:
+  - skillId: move_forward
+    description: Move the G1 humanoid forward using locomotion policy.
+    params:
+      durationSec:
+        type: number
+        min: 0.1
+        max: 10
+        default: 3.0
+      speed:
+        type: number
+        min: 0.0
+        max: 1.0
+        default: 0.5
+    paymentRequired: true
+    priceUSDC: "0.01"
+
+  - skillId: navigate_obstacle
+    description: Navigate around obstacles to reach a goal position using policy.
+    params:
+      goal_x:
+        type: number
+        description: Target X coordinate in meters
+        default: 3.0
+      goal_y:
+        type: number
+        description: Target Y coordinate in meters
+        default: 0.0
+    paymentRequired: true
+    priceUSDC: "0.05"
+
+  - skillId: stop
+    description: Stop all robot motion immediately.
+    params: {}
+    paymentRequired: false

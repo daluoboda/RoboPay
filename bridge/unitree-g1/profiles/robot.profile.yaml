@@ -1,0 +1,135 @@
+# unitree-g1 --- RoboPay Tier 1 bridge (Simulator Skill Execution)
+#
+# Humanoid robot profile for Unitree G1 (29 DOF).
+#
+# Acceptance criteria covered: #2 (Zenoh bridge), #6 (scope classification),
+# #8 (robot identity & wallet binding).
+#
+# Everything numeric in this file is asserted against g1_spec.py by
+# tests/test_profiles.py, so the profile can never drift from the robot.
+apiVersion: robopay.fabric/v1
+kind: RobotProfile
+
+profileId: unitree.unitree-g1.mujoco-sim.v1
+robotId: unitree-g1
+displayName: Unitree G1 (MuJoCo simulated humanoid walker)
+version: 1.0.0
+
+vendor:
+  name: Unitree Robotics
+  robotModel: g1
+  hardwareRevision: "n/a (simulated)"
+
+# --------------------------------------------------------------------- scope
+# Criterion #6. Stated once, machine-readable, and repeated in README.md.
+scope:
+  classification: simulator          # simulator | real-hardware | hybrid
+  tier: 1
+  simulationOnly: true
+  realWorldActuation: false
+  gpuRequired: false
+  networkEgressDuringExecution: false
+  safetyNote: >
+    This profile never drives physical hardware. Every action is executed by a
+    physics engine on CPU inside the robot process. No motor command, no
+    teleop channel and no hardware driver exists in this bridge.
+
+# ---------------------------------------------------------------- embodiment
+embodiment:
+  type: humanoid
+  degreesOfFreedom: 29
+  specSource: ../g1_spec.py         # single source of truth for BOTH engines
+  kinematics:
+    baseHeight: 0.05                 # g1_spec.BASE_HEIGHT
+    hipHeight: 0.45                  # g1_spec.HIP_HEIGHT
+    totalHeight: 1.05                # g1_spec.TOTAL_HEIGHT
+    legLength: 0.44                  # THIGH + SHIN
+    footLength: 0.05                 # g1_spec.FOOT_LEN
+    units: meters
+  joints:
+    # Left leg (6 DOF)
+    - {name: left_hip_roll,     type: hinge, axis: x, limitRad: -0.43,  maxRad: 0.43}
+    - {name: left_hip_pitch,    type: hinge, axis: y, limitRad: -1.57,  maxRad: 1.57}
+    - {name: left_hip_yaw,      type: hinge, axis: z, limitRad: -0.43,  maxRad: 0.43}
+    - {name: left_knee,         type: hinge, axis: y, limitRad: 0.0,    maxRad: 2.8}
+    - {name: left_ankle_pitch,  type: hinge, axis: y, limitRad: -0.52,  maxRad: 0.52}
+    - {name: left_ankle_roll,   type: hinge, axis: x, limitRad: -0.26,  maxRad: 0.26}
+    # Right leg (6 DOF)
+    - {name: right_hip_roll,    type: hinge, axis: x, limitRad: -0.43,  maxRad: 0.43}
+    - {name: right_hip_pitch,   type: hinge, axis: y, limitRad: -1.57,  maxRad: 1.57}
+    - {name: right_hip_yaw,     type: hinge, axis: z, limitRad: -0.43,  maxRad: 0.43}
+    - {name: right_knee,        type: hinge, axis: y, limitRad: 0.0,    maxRad: 2.8}
+    - {name: right_ankle_pitch, type: hinge, axis: y, limitRad: -0.52,  maxRad: 0.52}
+    - {name: right_ankle_roll,  type: hinge, axis: x, limitRad: -0.26,  maxRad: 0.26}
+    # Left arm (2 DOF)
+    - {name: left_shoulder_pitch, type: hinge, axis: y, limitRad: -0.52, maxRad: 2.0}
+    - {name: left_elbow,          type: hinge, axis: y, limitRad: -0.3,  maxRad: 2.5}
+    # Right arm (2 DOF)
+    - {name: right_shoulder_pitch, type: hinge, axis: y, limitRad: -0.52, maxRad: 2.0}
+    - {name: right_elbow,          type: hinge, axis: y, limitRad: -0.3,  maxRad: 2.5}
+    # Head (1 DOF)
+    - {name: head_yaw, type: hinge, axis: z, limitRad: -0.5, maxRad: 0.5}
+
+# ---------------------------------------------------------------- simulation
+simulation:
+  primaryEngine:
+    name: mujoco
+    versionSpec: ">=3.1,<4"
+    module: simulator.py
+    headless: true
+    timestep: 0.002                  # g1_spec.TIMESTEP
+  secondaryEngine:                   # Tier 1 sim-to-sim requirement
+    name: pybullet
+    versionSpec: ">=3.2.5"
+    module: simulator_pybullet.py
+    headless: true
+  determinism:
+    controller: policy-driven        # PotentialFieldPolicy computes velocities
+    policyDriven: true               # NOT a replayed animation
+    randomSeeds: false
+    replayedAnimation: false
+  physicsEvidence:                   # what makes this a real execution, not a mock
+    - gravity
+    - rigid-body-collision
+    - friction
+    - contact-normal-force
+    - free-floating-base-dynamics
+
+# ----------------------------------------------------------------- transport
+# Criterion #2. Topic names match flow/zenoh_transport.py exactly.
+transport:
+  protocol: zenoh
+  mode: peer
+  endpoint: tcp/127.0.0.1:17447      # flow/zenoh_transport.py::DEFAULT_ENDPOINT
+  encoding: application/json
+  correlationField: actionId
+  topics:
+    action: robot/tunnel/action      # tunnel -> robot
+    result: robot/tunnel/result      # robot  -> tunnel
+  node: flow/node.py
+  fallback:
+    name: loopback
+    reason: >
+      In-process transport used by unit tests and by platforms without zenoh
+      wheels. Same envelope, same handler, no payment shortcuts.
+
+# ------------------------------------------------------------------ identity
+# Criterion #8. Nothing secret is stored in this repository.
+identity:
+  walletAddressEnv: UNITREE_G1_WALLET_ADDRESS
+  privateKeyEnv: UNITREE_G1_PRIVATE_KEY
+  payToAddressEnv: UNITREE_G1_PAYTO_ADDRESS
+  keyMaterialInRepo: false
+  bindingRule: >
+    An action is only executed when its envelope carries robotId
+    `unitree-g1`; the settlement receipt is bound to the same robotId and
+    to the payTo address resolved from the environment at runtime.
+
+# ------------------------------------------------------------- capabilities
+capabilities:
+  skills: [move_forward, navigate_obstacle, stop]
+manifests:
+  skills: skills.yaml
+  functions: functions.yaml
+  paymentPolicy: payment-policy.yaml
+  execution-mapping: execution-mapping.yaml

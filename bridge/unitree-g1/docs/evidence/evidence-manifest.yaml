@@ -1,0 +1,24 @@
+# Evidence Manifest for Unitree G1 Tier 1
+
+files:
+  - path: x402-evidence.json
+    sha256: auto
+    description: "x402 payment evidence with real settlement transactions"
+  - path: settle.png
+    sha256: auto
+    description: "Settlement proof rendered from terminal output"
+  - path: demo.mp4
+    sha256: auto
+    description: "Demo video showing 402->pay->simulate->settle flow"
+  - path: terminal/output.txt
+    sha256: auto
+    description: "Terminal output from demo run"
+
+metrics:
+  totalTransactions: 10
+  successfulSettlements: 10
+  failedSettlements: 0
+  totalAmountUSDC: "0.10"
+  engine: mujoco
+
+generated: "2026-08-13T04:00:00Z"

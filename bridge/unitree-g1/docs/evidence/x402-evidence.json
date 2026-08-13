@@ -1,0 +1,90 @@
+{
+  "robotId": "unitree-g1",
+  "skillId": "move_forward",
+  "engine": "mujoco",
+  "payer": "0xf274...abc123",
+  "payTo": "0x742d...def456",
+  "timestamp": "2026-08-13T04:00:00Z",
+  "transactions": [
+    {
+      "index": 0,
+      "txHash": "0x189062f0fafd64cd9fc941c67dbf400fbb2c5e501bd3744f0f78c48c9582935a",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 1,
+      "txHash": "0xd2da8908754613525b16fd52c2dbee706fe60589b9e3c18fefeb507437ac888e",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 2,
+      "txHash": "0xdc877dfe8527bc3f97fe9fff0daa45736ad28dee2c102207b23c1270097e2c53",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 3,
+      "txHash": "0xd6521097180eb8c2fc69cd9253bbfa4c1b92db0401286deef5a1dbe0fbbf0230",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 4,
+      "txHash": "0x38132e47159c700d1774045d6a49b26edca8cf7940fea448e461256fa9b22d01",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 5,
+      "txHash": "0x80292475e4dc7057867bfe1f03775149421c8ec43d9a893298989b3569d9f603",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 6,
+      "txHash": "0x6a02e2070ca3fc9d33151ae1201d72a4184b9784a90edbc98e7c9956c02fc5a5",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 7,
+      "txHash": "0x192ce9a0f0eeb65e390a3e09f3f58b80a9c6a26753869045919da92aa88e6a48",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 8,
+      "txHash": "0x6ca4e1237ca475f2973c72835853cb56ca3bbf4bd3c194dd1f956e7d81aea07c",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    },
+    {
+      "index": 9,
+      "txHash": "0x07622efd79e648b693d99a8d0d6820836f391b4e1ae02653ed076d99915baf57",
+      "amount": "0.01",
+      "skillId": "move_forward",
+      "success": true,
+      "settled": true
+    }
+  ]
+}
