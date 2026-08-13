@@ -1,9 +1,0 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-MUJOCO_LOG.TXT
-.venv/
-venv/
-*.mp4
-*.gif
-.env

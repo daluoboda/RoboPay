@@ -59,7 +59,7 @@ def make_simulator(engine: str = "mujoco"):
 
 
 class SimExecutor(SkillExecutor):
-    """Real Tier 1 executor: physics-backed `pick_object` on fabric-arm-001."""
+    """Real Tier 1 executor: physics-backed `pick_object` on unitree-g1-arm-001."""
 
     def __init__(self, engine: str = "mujoco"):
         self.engine = engine

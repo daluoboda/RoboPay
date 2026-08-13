@@ -1,4 +1,4 @@
-# Demo Video Script — fabric-arm-001 / `pick_object`
+# Demo Video Script — unitree-g1-arm-001 / `pick_object`
 
 **Goal:** a ~4-minute screen recording that proves the Tier 1 "Simulator Skill
 Execution" bounty end-to-end: a real physics simulator (MuJoCo) executes a paid
@@ -10,7 +10,7 @@ Font large enough to read. Show the command, hit enter, then read the output.
 
 **Local prerequisites (do once, off-camera or in the first 20s):**
 ```bash
-cd bridge/fabric-arm-001
+cd bridge/unitree-g1-arm-001
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -21,9 +21,9 @@ pip install -r requirements.txt
 - **On screen:** `README.md` header, then:
   ```
   RoboPay Tier 1 — Simulator Skill Execution
-  fabric-arm-001  ·  skill: pick_object  ·  engine: MuJoCo 3.11
+  unitree-g1-arm-001  ·  skill: pick_object  ·  engine: MuJoCo 3.11
   ```
-- **Voiceover:** "This is fabric-arm-001, a paid robotic-arm skill running inside
+- **Voiceover:** "This is unitree-g1-arm-001, a paid robotic-arm skill running inside
   a real physics simulator. It answers the Tier 1 bounty: prove a simulator
   actually executes a paid skill, and that you only get charged when it succeeds."
 
@@ -79,7 +79,7 @@ pip install -r requirements.txt
 
 ## 03:20–04:00 — Close + call to action
 - **On screen:** final terminal with the repo path and the PR link placeholder.
-- **Voiceover:** "Fork, drop `bridge/fabric-arm-001/` into RoboPay, push, and the
+- **Voiceover:** "Fork, drop `bridge/unitree-g1-arm-001/` into RoboPay, push, and the
   CI proves it. Thanks for reviewing."
 
 ---

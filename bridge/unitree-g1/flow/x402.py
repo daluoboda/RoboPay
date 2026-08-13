@@ -1,4 +1,4 @@
-"""x402 payment verification for fabric-arm-001 (D7 payment boundary).
+"""x402 payment verification for unitree-g1-arm-001 (D7 payment boundary).
 
 What the reviewer asked for (PR #70, CHANGES_REQUESTED):
     "demonstrate verification and settlement through the RoboPay Tunnel
