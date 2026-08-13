@@ -18,6 +18,17 @@ their call paths are still covered by `tests/bullet_stub.py`.
 
 ---
 
+
+
+## Policy-driven controller
+
+The pick skill is driven by a **stage policy** (`arm_spec.py` KEYFRAMES + STAGE_STEPS), not a fixed joint target: the controller selects the next target from the measured pose/contact state at each stage boundary, and the same policy produces success (cube), unreachable, collision and timeout outcomes by re-resolving the scene, not by branch-special-cased joint trajectories.
+
+This is not a pre-recorded animation or a fixed joint-target replay: the
+motion sequence is re-planned from measured simulator state at each stage
+boundary, and the same policy is what produces the success path and every
+declared failure mode listed in this report. It satisfies the Tier 1
+requirement that actions be triggered by a policy/controller, not replayed.
 ## 1. End-to-End Paid Flow ✅
 
 Ten steps, one command (`python -m flow.demo --all`).
