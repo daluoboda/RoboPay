@@ -38,8 +38,7 @@ ROOT = PACKAGE_ROOT.parents[2]
 SKILL_CATALOG = (
     ROOT
     / "registry/vendors/laok/sort-arm-001"
-    / "registry/vendors/laok/sort-arm-001/laok.sort-arm-001.pick-and-sort.v1"
-    / "skill-catalog.json"
+    / "laok.sort-arm-001.pick.v1/skill-catalog.json"
 )
 ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
