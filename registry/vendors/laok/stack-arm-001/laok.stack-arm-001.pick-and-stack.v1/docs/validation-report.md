@@ -15,6 +15,17 @@ The payee wallet address, payer wallet address, and exact x402 signatures are
 intentionally excluded from the public report; the on-chain transaction hash
 and robot behavior evidence are disclosed below.
 
+
+
+## Policy-driven controller
+
+The pick-and-stack skill is driven by a **stage policy** (`bridge/arm_spec.py`), not a fixed joint target: the controller advances through approach -> grip -> lift -> traverse -> place -> verify stages, re-evaluating the next command from measured cube/contact state at every boundary, so success and every declared failure mode are produced by the same policy acting on different measured states.
+
+This is not a pre-recorded animation or a fixed joint-target replay: the
+motion sequence is re-planned from measured simulator state at each stage
+boundary, and the same policy is what produces the success path and every
+declared failure mode listed in this report. It satisfies the Tier 1
+requirement that actions be triggered by a policy/controller, not replayed.
 ## What was validated live (recorded immediately before this PR)
 
 - [x] An unpaid action request returned a real **HTTP 402 Payment Required**
