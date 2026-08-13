@@ -32,7 +32,7 @@ class TestSafeStopReal:
     def test_collision_aborts_and_never_settles(self):
         """A physical abort triggers the safe-stop path: run fails."""
         sim = MuJoCoSimulator()
-        result = sim.pick_and_sort({"collision_key": "collision"} if False else {"object": "collision"} if False else {"scene": "collision"} if False else {"object": "collision"})
+        result = sim.pick_and_sort({"object": "collision"})
         assert result.success is False, "collision must fail"
         assert result.reason == "collision", result.reason
         assert result.metrics.get("collisionCount", 0) > 0 or "collision" in str(result.reason)
