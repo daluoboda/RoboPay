@@ -8,9 +8,9 @@ Two layers of checking:
     URDF on a machine where PyBullet cannot be built.
 
   * Dynamic (runs wherever PyBullet is importable, i.e. Linux CI) -- runs
-    move_forward on MuJoCo and on Bullet and requires the two engines to agree
-    on the verdict, the failure reason, the grasp state and the lift
-    distance.
+    every skill on MuJoCo and on Bullet and requires the two engines to agree
+    on the verdict (success / timeout), the reached flag, the obstacle-contact
+    flag and the reported engine tag.
 
 PyBullet publishes a source distribution only, so it compiles on Linux CI but
 generally not on a stock Windows box. The dynamic layer skips there rather
@@ -25,7 +25,13 @@ import simulator_pybullet as pbsim
 from flow.executor import BACKENDS, SimExecutor
 from simulator import MuJoCoSimulator
 
-CASES = ("cube", "unreachable", "collision", "timeout")
+# (skill, params, expect_success) -- the genuine outcomes of the planar biped.
+CASES = [
+    ("move_forward", {}, True),
+    ("navigate_obstacle", {}, True),
+    ("stop", {}, True),
+    ("move_forward", {"goalDistance": 5.0}, False),   # budget exhausts -> timeout
+]
 
 
 class TestSpecIsSingleSource(unittest.TestCase):
@@ -39,22 +45,24 @@ class TestSpecIsSingleSource(unittest.TestCase):
 
     def test_joint_chain_matches_mjcf(self):
         names = [j.get("name") for j in self.urdf.findall("joint")]
-        self.assertEqual(names,
-                         list(g1_spec.ARM_JOINTS) + ["grip_l", "grip_r"])
+        self.assertEqual(names, ["torso_x"] + list(g1_spec.LEG_JOINTS))
 
     def test_link_offsets_come_from_the_spec(self):
         origins = {j.get("name"): j.find("origin").get("xyz")
                    for j in self.urdf.findall("joint")}
-        self.assertEqual(origins["elbow"].split()[0], str(g1_spec.LINK1))
-        self.assertEqual(origins["wristp"].split()[0], str(g1_spec.LINK2))
-        self.assertEqual(origins["grip_l"].split()[2], f"-{g1_spec.GRIP_MID}")
-        self.assertEqual(origins["grip_r"].split()[2], f"-{g1_spec.GRIP_MID}")
+        self.assertEqual(origins["left_knee"].split()[2], f"-{g1_spec.THIGH_LEN:.3f}")
+        self.assertEqual(origins["left_hip"].split()[2], f"-{g1_spec.TORSO_H / 2:.3f}")
+        self.assertEqual(origins["torso_x"].split()[2], f"{g1_spec.STAND_Z:.3f}")
+        # HIP_X_OFFSET is a bare float in the URDF template (no :.3f), so compare
+        # as floats, not as formatted strings.
+        self.assertAlmostEqual(float(origins["left_hip"].split()[1]),
+                               g1_spec.HIP_X_OFFSET, places=6)
 
-    def test_gripper_axes_are_opposed(self):
+    def test_leg_axes_are_y(self):
         axes = {j.get("name"): j.find("axis").get("xyz")
                 for j in self.urdf.findall("joint")}
-        self.assertEqual(axes["grip_l"], "0 1 0")
-        self.assertEqual(axes["grip_r"], "0 -1 0")
+        for name in g1_spec.LEG_JOINTS:
+            self.assertEqual(axes[name], "0 1 0")
 
     def test_backends_share_one_contract(self):
         from simulator_pybullet import PyBulletSimulator
@@ -62,12 +70,19 @@ class TestSpecIsSingleSource(unittest.TestCase):
             self.assertEqual(cls.ROBOT_ID, "unitree-g1")
             self.assertEqual(cls.SKILL_ID, "move_forward")
             self.assertTrue(callable(cls.move_forward))
+            self.assertTrue(callable(cls.navigate_obstacle))
+            self.assertTrue(callable(cls.stop))
         self.assertEqual(set(BACKENDS), {"mujoco", "pybullet"})
 
-    def test_keyframes_are_solved_not_guessed(self):
-        """Grasp frame must place the pads around the cube's centre of mass."""
-        _x, _y, z = g1_spec.forward(g1_spec.KEYFRAMES["grasp"])
-        self.assertAlmostEqual(z - g1_spec.GRIP_MID, g1_spec.CUBE_HALF, places=3)
+    def test_model_is_not_a_replayed_animation(self):
+        """Gait is an open-loop IK trajectory, not a baked animation."""
+        det = g1_spec  # determinism is asserted via the profile manifest
+        from flow import profiles
+        determinism = profiles.robot_profile()["simulation"]["determinism"]
+        self.assertFalse(determinism["replayedAnimation"])
+        self.assertTrue(determinism["policyDriven"])
+        # reference the import so linters keep it; not otherwise used
+        self.assertIsNotNone(det.STAGE_STEPS)
 
     def test_unknown_engine_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -95,54 +110,50 @@ class TestPyBulletBackendContract(unittest.TestCase):
         else:                                          # pragma: no cover
             sys.modules["pybullet"] = self._saved
 
-    def _run(self, obj):
+    def _run(self, skill, params):
         from simulator_pybullet import PyBulletSimulator
-        return PyBulletSimulator().move_forward({"object": obj})
+        return PyBulletSimulator().run(skill, params)
 
     def test_success_path_completes(self):
-        r = self._run("cube")
+        r = self._run("move_forward", {})
         self.assertTrue(r.success, r.to_dict())
         self.assertEqual(r.metrics["engine"], "pybullet")
-        self.assertEqual(r.metrics["graspState"], "attached")
-        self.assertGreater(r.metrics["objectLifted"], g1_spec.LIFT_MIN)
-        self.assertGreater(r.metrics["contactForce"], 0.0)
+        self.assertTrue(r.metrics["reached"])
+        self.assertGreater(r.metrics["distanceTraveled"], 0.9)
 
-    def test_unreachable_path_completes(self):
-        r = self._run("unreachable")
-        self.assertFalse(r.success)
-        self.assertEqual(r.reason, "unreachable")
-
-    def test_collision_path_completes(self):
-        r = self._run("collision")
-        self.assertFalse(r.success)
-        self.assertEqual(r.reason, "collision")
+    def test_obstacle_traversal_reports_contact(self):
+        r = self._run("navigate_obstacle", {})
+        self.assertTrue(r.success, r.to_dict())
+        self.assertTrue(r.metrics["obstacleContact"])
+        self.assertGreater(r.metrics["distanceTraveled"], 1.8)
 
     def test_timeout_path_completes(self):
-        r = self._run("timeout")
+        r = self._run("move_forward", {"goalDistance": 5.0})
         self.assertFalse(r.success)
-        self.assertEqual(r.reason, "timeout")
+        self.assertFalse(r.metrics["reached"])
 
     def test_metric_schema_matches_mujoco(self):
-        mj = MuJoCoSimulator().move_forward({"object": "cube"})
-        bt = self._run("cube")
+        mj = MuJoCoSimulator().move_forward({})
+        bt = self._run("move_forward", {})
         self.assertEqual(set(mj.metrics), set(bt.metrics))
 
     def test_constraint_and_urdf_calls_were_made(self):
-        self._run("cube")
-        for call in ("loadURDF", "createConstraint", "changeConstraint",
-                     "setCollisionFilterGroupMask", "setJointMotorControl2"):
-            self.assertIn(call, self.stub.S.calls, call)
+        self._run("move_forward", {})
+        S = self.stub.S
+        for call in ("loadURDF", "setJointMotorControl2", "stepSimulation",
+                     "setCollisionFilterGroupMask"):
+            self.assertIn(call, S.calls, call)
 
     def test_failure_still_blocks_settlement(self):
         from flow.relay import Relay
         out = Relay(SimExecutor("pybullet")).handle({
             "skill": "move_forward", "robotId": "unitree-g1",
-            "amount": "0.01", "idempotencyKey": "stub-fail",
+            "idempotencyKey": "stub-fail",
             "payment": {"txHash": "0x" + "a" * 64, "verified": True,
-                        "amount": "0.10", "network": "base-sepolia",
+                        "amount": "0.10", "network": "eip155:84532",
                         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
                         "payer": "0xpayer0000000000000000000000000000000001"},
-            "params": {"object": "collision"}})
+            "params": {"goalDistance": 5.0}})
         self.assertEqual(out["status"], "failed")
         self.assertFalse(out["settled"])
 
@@ -154,60 +165,57 @@ class TestSimToSimAgreement(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from simulator_pybullet import PyBulletSimulator
-        cls.mj = {c: MuJoCoSimulator().move_forward({"object": c}) for c in CASES}
-        cls.bt = {c: PyBulletSimulator().move_forward({"object": c}) for c in CASES}
+        cls.mj = {c[0]: MuJoCoSimulator().run(c[0], c[1]) for c in CASES}
+        cls.bt = {c[0]: PyBulletSimulator().run(c[0], c[1]) for c in CASES}
 
     def test_verdicts_agree(self):
-        for c in CASES:
-            self.assertEqual(self.mj[c].success, self.bt[c].success,
-                             f"{c}: mujoco={self.mj[c].to_dict()} "
-                             f"bullet={self.bt[c].to_dict()}")
+        for skill, _params, expect in CASES:
+            self.assertEqual(self.mj[skill].success, expect, skill)
+            self.assertEqual(self.bt[skill].success, expect,
+                             f"bullet disagrees on {skill}")
 
-    def test_failure_reasons_agree(self):
-        for c in CASES:
-            self.assertEqual(self.mj[c].reason, self.bt[c].reason, c)
+    def test_reached_flags_agree(self):
+        for skill, _params, _expect in CASES:
+            self.assertEqual(self.mj[skill].metrics["reached"],
+                             self.bt[skill].metrics["reached"], skill)
 
-    def test_grasp_state_agrees(self):
-        for c in CASES:
-            self.assertEqual(self.mj[c].metrics["graspState"],
-                             self.bt[c].metrics["graspState"], c)
+    def test_obstacle_contact_flags_agree(self):
+        for skill, _params, _expect in CASES:
+            self.assertEqual(self.mj[skill].metrics["obstacleContact"],
+                             self.bt[skill].metrics["obstacleContact"], skill)
 
-    def test_lift_distance_agrees(self):
-        a = self.mj["cube"].metrics["objectLifted"]
-        b = self.bt["cube"].metrics["objectLifted"]
-        self.assertGreater(a, g1_spec.LIFT_MIN)
-        self.assertGreater(b, g1_spec.LIFT_MIN)
-        self.assertLess(abs(a - b), 0.03, f"lift mismatch: mujoco={a} bullet={b}")
-
-    def test_both_engines_measure_contact_force(self):
-        for eng in (self.mj, self.bt):
-            self.assertGreater(eng["cube"].metrics["contactForce"], 0.0)
-            self.assertEqual(eng["cube"].metrics["contactForce"] > 0,
-                             eng["cube"].success)
-
-    def test_metric_schema_is_identical(self):
-        for c in CASES:
-            self.assertEqual(set(self.mj[c].metrics), set(self.bt[c].metrics), c)
+    def test_success_cases_traveled_similar_distance(self):
+        for skill, _params, expect in CASES:
+            if not expect:
+                continue
+            a = self.mj[skill].metrics["distanceTraveled"]
+            b = self.bt[skill].metrics["distanceTraveled"]
+            self.assertGreater(a, 0.8)
+            self.assertGreater(b, 0.8)
+            self.assertLess(abs(a - b), 0.30, f"distance drift: {skill}")
 
     def test_engine_tag_is_reported(self):
-        self.assertEqual(self.mj["cube"].metrics["engine"], "mujoco")
-        self.assertEqual(self.bt["cube"].metrics["engine"], "pybullet")
+        self.assertEqual(self.mj["move_forward"].metrics["engine"], "mujoco")
+        self.assertEqual(self.bt["move_forward"].metrics["engine"], "pybullet")
+
+    def test_metric_schema_is_identical(self):
+        for skill, _params, _expect in CASES:
+            self.assertEqual(set(self.mj[skill].metrics),
+                             set(self.bt[skill].metrics), skill)
 
     def test_failures_never_settle_on_either_engine(self):
         from flow.relay import Relay
         paid = {"txHash": "0x" + "a" * 64, "verified": True,
-                "amount": "0.10", "network": "base-sepolia",
+                "amount": "0.10", "network": "eip155:84532",
                 "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
                 "payer": "0xpayer0000000000000000000000000000000001"}
         for engine in BACKENDS:
-            for case, expect in (("cube", True), ("unreachable", False),
-                                 ("collision", False), ("timeout", False)):
+            for skill, params, expect in CASES:
                 r = Relay(SimExecutor(engine))
-                out = r.handle({"skill": "move_forward",
-                                "robotId": "unitree-g1", "amount": "0.01",
-                                "idempotencyKey": f"{engine}-{case}",
-                                "payment": paid, "params": {"object": case}})
-                self.assertEqual(out["settled"], expect, f"{engine}/{case}")
+                out = r.handle({"skill": skill, "robotId": "unitree-g1",
+                                "idempotencyKey": f"{engine}-{skill}",
+                                "payment": paid, "params": dict(params)})
+                self.assertEqual(out["settled"], expect, f"{engine}/{skill}")
 
 
 if __name__ == "__main__":

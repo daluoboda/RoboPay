@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: '3.10'
       - run: pip install -r bridge/unitree-g1/requirements.txt
-      - run: pytest -q bridge/unitree-g1/tests/test_tee
+      - run: pytest -q bridge/unitree-g1/tests/test_x402.py
 
   sim2sim:
     runs-on: ubuntu-22.04

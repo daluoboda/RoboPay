@@ -218,9 +218,11 @@ class PyBulletSimulator:
                                           physicsClientId=c)
             self._curb_ids.append(bid)
 
-        # pin the initial pose and pin every joint as kinematic drive targets
-        self._reset_pose()
+        # pin the initial pose and pin every joint as kinematic drive targets.
+        # _obstacles must exist before _reset_pose() (which drives the feet via
+        # _ground_z, reading self._obstacles).
         self._obstacles = list(obstacles or ())
+        self._reset_pose()
 
     def _teardown(self):
         if self._cid is not None:

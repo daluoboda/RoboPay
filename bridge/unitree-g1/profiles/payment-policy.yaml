@@ -7,7 +7,7 @@ provider:
   network: eip155:84532          # Base Sepolia
   chainId: 84532
   asset:
-    address: "0x036CbD53842c5426634e7929541E2318f3dCF7e"   # Base Sepolia USDC
+    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"   # Base Sepolia USDC (Circle-verified)
     symbol: USDC
     decimals: 6
   amount: "0.10"

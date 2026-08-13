@@ -6,6 +6,7 @@ functions:
     description: List available skills for this robot
     method: GET
     url: /v1/robots/{robotId}/skills
+    paid: false
 
   - name: request_robot_action
     description: Request a robot action (unpaid - returns 402)
@@ -15,6 +16,7 @@ functions:
       skillId: string
       params: object
       idempotencyKey: string
+    paid: false
     paymentUnpaidStatus: 402
     paymentRequiredHeader: payment-required
 
@@ -28,3 +30,4 @@ functions:
       skillId: string
       params: object
       idempotencyKey: string
+    paid: true

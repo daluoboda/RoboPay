@@ -125,6 +125,9 @@ def _build_xml(obstacles) -> str:
 class MuJoCoSimulator:
     """Physics-backed walker for unitree-g1."""
 
+    ROBOT_ID = "unitree-g1"
+    SKILL_ID = "move_forward"
+
     def __init__(self):
         self._model = None
         self._data = None

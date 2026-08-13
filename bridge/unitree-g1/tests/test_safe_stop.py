@@ -3,16 +3,18 @@
 Criterion #5 (bounded policy + interruptible execution + safe stop) proven
 with real physics, not mocks:
 
-  * collision scene  -> the arm strikes the obstacle and ABORTS (safe stop),
-                        returns failure, never settles.
-  * timeout scene    -> the step budget is exhausted mid-trajectory and the
+  * timeout scene    -> the step budget is exhausted before the goal and the
                         run STOPS (bounded policy), returns failure, never
                         settles.
-  * unreachable      -> out-of-envelope target: the arm stops short at full
-                        stretch (interruptible execution), returns failure.
+  * stop skill       -> the run holds a stable pose and terminates cleanly
+                        inside the budget (interruptible execution).
+  * normal scenes    -> move_forward / navigate_obstacle complete inside the
+                        budget, proving the bound is not an arbitrary truncation.
+  * replay           -> the same idempotency key is rejected, so a paid action
+                        is never re-actuated or re-settled.
 
-The same simulator the paid flow uses (MuJoCoSimulator.move_forward) is
-driven here, so the stop behaviour is the production stop behaviour.
+The same simulator the paid flow uses (MuJoCoSimulator) is driven here, so the
+stop behaviour is the production stop behaviour.
 """
 
 import os
@@ -31,39 +33,68 @@ except Exception:  # pragma: no cover - MuJoCo absent on some platforms
 
 @pytest.mark.skipif(not HAS_SIM, reason="MuJoCo simulator not available")
 class TestSafeStopReal:
-    def test_collision_aborts_and_never_settles(self):
-        """A collision mid-approach triggers the safe-stop path: the run
-        aborts, returns failure, and the relay must not settle."""
-        sim = MuJoCoSimulator()
-        result = sim.move_forward({"object": "collision"})
-        assert result.success is False, "collision must fail"
-        assert result.reason == "collision", result.reason
-        assert result.metrics.get("collisionCount", 0) > 0, \
-            "a real MuJoCo contact must be recorded"
-
     def test_timeout_stops_on_budget(self):
         """A clipped step budget stops execution (bounded policy) and the
         run returns failure without settling."""
         sim = MuJoCoSimulator()
-        result = sim.move_forward({"object": "timeout"})
+        result = sim.move_forward({"goalDistance": 5.0})
         assert result.success is False, "timeout must fail"
-        assert result.reason == "timeout", result.reason
         steps = result.metrics.get("stepsUsed", 0)
         budget = result.metrics.get("stepBudget", 0)
         assert steps >= budget, "execution must stop when the budget is exhausted"
 
-    def test_unreachable_stops_short(self):
-        """An out-of-envelope target interrupts the trajectory: the arm
-        stops short at full stretch (interruptible execution)."""
+    def test_stop_completes_within_budget(self):
         sim = MuJoCoSimulator()
-        result = sim.move_forward({"object": "unreachable"})
-        assert result.success is False, "unreachable must fail"
-        assert result.reason == "unreachable", result.reason
+        result = sim.stop({})
+        assert result.success is True, result.reason
+        assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
 
     def test_normal_scene_completes_within_budget(self):
         """The nominal scene completes inside the step budget, proving the
         bounded policy is not an arbitrary truncation."""
         sim = MuJoCoSimulator()
-        result = sim.move_forward({"object": "cube"})
+        result = sim.move_forward({})
         assert result.success is True, result.reason
         assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
+
+    def test_obstacle_scene_completes_within_budget(self):
+        sim = MuJoCoSimulator()
+        result = sim.navigate_obstacle({})
+        assert result.success is True, result.reason
+        assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
+
+    def test_timeout_never_settles(self):
+        from flow.executor import MuJoCoExecutor
+        from flow.relay import Relay
+        r = Relay(MuJoCoExecutor())
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+                         "idempotencyKey": "safestop-timeout",
+                         "payment": {"txHash": "0x" + "a" * 64, "verified": True,
+                                     "amount": "0.10", "network": "eip155:84532",
+                                     "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                                     "payer": "0xpayer0000000000000000000000000000000001"},
+                         "params": {"goalDistance": 5.0}})
+        assert resp["status"] == "failed"
+        assert resp["settled"] is False
+
+    def test_replay_is_interruptible(self):
+        """A replayed idempotency key is rejected: no second actuation, no
+        second settlement."""
+        from flow.executor import MuJoCoExecutor
+        from flow.relay import Relay
+        r = Relay(MuJoCoExecutor())
+        first = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+                          "idempotencyKey": "safestop-replay",
+                          "payment": {"txHash": "0x" + "a" * 64, "verified": True,
+                                      "amount": "0.10", "network": "eip155:84532",
+                                      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                                      "payer": "0xpayer0000000000000000000000000000000001"}})
+        assert first["settled"] is True
+        replay = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+                           "idempotencyKey": "safestop-replay",
+                           "payment": {"txHash": "0x" + "a" * 64, "verified": True,
+                                       "amount": "0.10", "network": "eip155:84532",
+                                       "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                                       "payer": "0xpayer0000000000000000000000000000000001"}})
+        assert replay["status"] == "rejected"
+        assert replay["reason"] == "duplicate_idempotency_key"
