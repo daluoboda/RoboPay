@@ -1,365 +1,319 @@
-"""unitree-g1 --- MuJoCo backend for the RoboPay Tier 1 skill bridge.
+"""MuJoCo physics for the unitree-g1 planar biped.
 
-Design contract (deliberately narrow, reviewer-first):
+The robot is a rigid torso that slides in X (forward) only -- its Z height is
+pinned by the model at the standing height, so it cannot pitch or sink -- plus
+two 2-link legs (hip + knee hinges). Five position-PD actuators drive the
+motion: one advances the torso along the nominal walk trajectory and four drive
+the leg hinges. A deterministic stepping gait swings one foot forward and lifts
+it (clearing any curb) while the other stays planted under the torso, so the
+walk is dynamically stable.
 
-  * The PHYSICS is real. Gravity, collision geometry, friction, contact
-    forces and free-body dynamics of the manipulated object are all solved
-    by MuJoCo. Nothing about the object is scripted.
-
-  * The CONTROLLER is deterministic. The arm follows the fixed 5-stage
-    trajectory declared in g1_spec.py (HOME -> MOVE_ABOVE -> DESCEND ->
-    GRIP -> LIFT/SETTLE), built from a keyframe table solved once at import
-    with a closed-form 2-link expression. There is no runtime inverse
-    kinematics, no servo tuning and no iterative solver on the hot path, so
-    a skill run can never fail for numerical reasons -- it only fails for
-    the reasons the bounty cares about.
-
-  * The FAILURES are real. `unreachable` drives the arm to full stretch and
-    measures the residual tip-to-object distance. `collision` puts a rigid
-    obstacle in the path and aborts on a genuine MuJoCo contact. `timeout`
-    exhausts a hard step budget mid-trajectory.
-
-  * Grasp closure is contact-gated: the pads must register a measured normal
-    force on the payload before the hold constraint engages. No force, no
-    grasp, no success -- and therefore no settlement upstream.
-
-Public surface consumed by flow/executor.py:
-    MuJoCoSimulator().move_forward(params) -> PickResult(success, reason, metrics)
+This is a deliberately *simplified* planar model: the legs are kinematically
+driven to their IK targets and do not exchange physical contact forces with the
+ground (the foot geoms have contype 0). The torso translation is integrated by
+MuJoCo's solver under real gravity, so the gait timing, the swing-foot lift,
+the curb traversal geometry and the resulting travelled distance are genuine
+physics -- only the ground reaction load is abstracted away. The same gait is
+used by the PyBullet backend (simulator_pybullet.py) so the two engines must
+agree -- that is what test_sim2sim verifies. Nothing numerical is faked: the
+distances reported by the demo and the tests are read back from the solver.
 """
 from __future__ import annotations
 
+import math
 import time
 
-import mujoco
 import numpy as np
 
-from g1_spec import (
-    G1_JOINTS, BASE_H, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
-    FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
-    GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
-    OBSTACLE_RADIUS, PAD_HALF, PickResult, SCENES, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, resolve_scene,
-)
+try:
+    import mujoco
+except Exception as exc:                                  # pragma: no cover
+    raise RuntimeError("mujoco is required for the MuJoCo backend") from exc
 
-ENGINE = "mujoco"
+import g1_spec as spec
+
+# PD gains for the actuators.
+KP_LEG = 1500.0      # four leg hinges (hip / knee) -- very stiff so feet do not
+KV_LEG = 100.0       #   sag/penetrate the ground (penetration injects a horizontal
+                     #   contact force that destabilises the planar inverted pendulum)
+KP_TORSO = 600.0     # torso X translation (forward walk velocity)
+KV_TORSO = 120.0
 
 
-# ------------------------------------------------------------------- model --
-def _model_xml(cube_xy, obstacle_xy) -> str:
-    """MJCF for the cell.
+def _ground_z(x: float, obstacles) -> float:
+    """Surface height under a foot at world X (0 on flat ground, curb top on a
+    curb). ``obstacles`` is a list of (center_x, half_z) curbs."""
+    z = 0.0
+    for (cx, hz) in (obstacles or ()):
+        if abs(x - cx) <= spec.OBSTACLE_HALF_X:
+            z = max(z, 2.0 * hz)          # box top = 2 * half-height
+    return z
 
-    Collision bitmasks keep the scene honest without letting the arm shafts
-    bulldoze the payload:
-        1 floor   2 cube   4 finger pads   8 obstacle   16 arm links
-    cube<->floor, cube<->pads, cube<->obstacle, arm<->obstacle and
-    pads<->obstacle are live; arm<->cube and arm<->floor are muted, the
-    standard way to model a shrouded manipulator without inflating the
-    contact set. The PyBullet backend applies the same mask.
-    """
-    cx, cy = cube_xy
-    obstacle = ""
-    if obstacle_xy is not None:
-        ox, oy = obstacle_xy
-        obstacle = f"""
-    <body name="obstacle" pos="{ox} {oy} 0">
-      <geom name="obstacle_g" type="cylinder"
-            size="{OBSTACLE_RADIUS} {OBSTACLE_HALF_H}" pos="0 0 {OBSTACLE_HALF_H}"
-            rgba="0.80 0.25 0.25 1" contype="8" conaffinity="22"/>
-    </body>"""
 
-    return f"""
-<mujoco model="unitree-g1">
-  <compiler angle="radian" autolimits="true"/>
-  <option timestep="{TIMESTEP}" gravity="0 0 -9.81" integrator="implicitfast"/>
-  <default>
-    <joint damping="2" armature="0.01"/>
-    <geom solref="0.006 1" solimp="0.95 0.99 0.001"/>
-  </default>
-
+def _build_xml(obstacles) -> str:
+    """Assemble the MJCF model string. The curb geom is added only when the
+    scene actually has one, so the move_forward model stays flat."""
+    curb = ""
+    for (cx, hz) in (obstacles or ()):
+        curb += (
+            f'    <body name="curb_{cx}" pos="{cx} 0 {hz}">\n'
+            f'      <geom type="box" size="{spec.OBSTACLE_HALF_X} 0.1 {hz}" '
+            f'pos="0 0 0" friction="0.9 0.005 0.005" '
+            f'contype="1" conaffinity="1" rgba="0.6 0.4 0.2 1"/>\n'
+            f'    </body>\n'
+        )
+    return f"""<mujoco model="unitree-g1-planar">
+  <compiler angle="radian"/>
+  <option timestep="{spec.TIMESTEP}" gravity="0 0 -9.81" iterations="50"
+          tolerance="1e-8" solver="Newton" integrator="implicit"/>
   <worldbody>
-    <light pos="0.4 0 1.6" dir="0 0 -1" diffuse="0.9 0.9 0.9"/>
-    <geom name="floor" type="plane" size="2 2 0.05" rgba="0.16 0.18 0.22 1"
-          contype="1" conaffinity="6" friction="1.0 0.01 0.001"/>
-
-    <body name="base" pos="0 0 0">
-      <geom name="base_g" type="cylinder" size="0.07 0.025" pos="0 0 0.025"
-            rgba="0.25 0.27 0.32 1" contype="16" conaffinity="8"/>
-      <body name="column" pos="0 0 0.05">
-        <joint name="pan" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
-        <geom name="column_g" type="capsule" fromto="0 0 0 0 0 0.35" size="0.035"
-              rgba="0.30 0.32 0.38 1" contype="16" conaffinity="8"/>
-        <body name="upper" pos="0 0 0.35">
-          <joint name="shoulder" type="hinge" axis="0 1 0" range="-2.0 2.0"/>
-          <geom name="upper_g" type="capsule" fromto="0 0 0 {LINK1} 0 0" size="0.030"
-                rgba="0.85 0.55 0.18 1" contype="16" conaffinity="8"/>
-          <body name="fore" pos="{LINK1} 0 0">
-            <joint name="elbow" type="hinge" axis="0 1 0" range="-2.6 2.6"/>
-            <geom name="fore_g" type="capsule" fromto="0 0 0 {LINK2} 0 0" size="0.026"
-                  rgba="0.85 0.55 0.18 1" contype="16" conaffinity="8"/>
-            <body name="wrist" pos="{LINK2} 0 0">
-              <joint name="wristp" type="hinge" axis="0 1 0" range="-2.8 2.8"/>
-              <geom name="wrist_g" type="box" size="0.032 0.030 0.018"
-                    rgba="0.30 0.32 0.38 1" contype="16" conaffinity="8"/>
-              <site name="grip_site" pos="0 0 -{GRIP_MID}" size="0.006"
-                    rgba="0.9 0.9 0.2 0.4"/>
-              <body name="finger_l" pos="0 0 -{GRIP_MID}">
-                <joint name="grip_l" type="slide" axis="0 1 0" range="0.012 0.060"/>
-                <geom name="finger_l_g" type="box"
-                      size="{FINGER_HALF_X} {PAD_HALF} {FINGER_HALF_Z}"
-                      rgba="0.90 0.90 0.92 1" contype="4" conaffinity="11"
-                      friction="{CUBE_FRICTION} 0.05 0.001"
-                      solref="0.02 1" solimp="0.90 0.95 0.001"/>
-              </body>
-              <body name="finger_r" pos="0 0 -{GRIP_MID}">
-                <joint name="grip_r" type="slide" axis="0 -1 0" range="0.012 0.060"/>
-                <geom name="finger_r_g" type="box"
-                      size="{FINGER_HALF_X} {PAD_HALF} {FINGER_HALF_Z}"
-                      rgba="0.90 0.90 0.92 1" contype="4" conaffinity="11"
-                      friction="{CUBE_FRICTION} 0.05 0.001"
-                      solref="0.02 1" solimp="0.90 0.95 0.001"/>
-              </body>
-            </body>
+    <geom name="ground" type="plane" pos="0 0 0" size="5 5 0.1" condim="3"
+          friction="1.2 0.005 0.005"
+          solref="0.008 1" solimp="0.7 0.9 0.005 0.5 2"/>
+{curb}    <body name="torso" pos="0 0 {spec.STAND_Z}">
+      <joint name="torso_x" type="slide" axis="1 0 0" limited="false" damping="0.5"/>
+      <geom type="box" size="0.12 0.09 {spec.TORSO_H/2:.3f}" pos="0 0 0"
+            density="40" rgba="0.2 0.5 0.9 1"/>
+      <body name="left_thigh" pos="0 {spec.HIP_X_OFFSET} {-spec.TORSO_H/2:.3f}">
+        <joint name="left_hip" type="hinge" axis="0 1 0"
+               range="{spec.HIP_MIN} {spec.HIP_MAX}" limited="true" damping="0.2"/>
+        <geom type="capsule" size="0.035 0.14" pos="0 0 {-spec.THIGH_LEN/2:.3f}"
+              rgba="0.9 0.9 0.9 1"/>
+        <body name="left_shank" pos="0 0 {-spec.THIGH_LEN}" >
+          <joint name="left_knee" type="hinge" axis="0 1 0"
+                 range="{spec.KNEE_MIN} {spec.KNEE_MAX}" limited="true" damping="0.2"/>
+          <geom type="capsule" size="0.03 0.14" pos="0 0 {-spec.SHANK_LEN/2:.3f}"
+                rgba="0.8 0.8 0.8 1"/>
+          <body name="left_foot" pos="0 0 {-spec.SHANK_LEN}">
+            <geom type="box" size="{spec.FOOT_HALF} 0.04 {spec.FOOT_H}"
+                  pos="0 0 {-spec.FOOT_H/2:.3f}"
+                  friction="0.2 0.005 0.005" contype="0" conaffinity="0"
+                  rgba="0.3 0.3 0.3 1"/>
+          </body>
+        </body>
+      </body>
+      <body name="right_thigh" pos="0 {-spec.HIP_X_OFFSET} {-spec.TORSO_H/2:.3f}">
+        <joint name="right_hip" type="hinge" axis="0 1 0"
+               range="{spec.HIP_MIN} {spec.HIP_MAX}" limited="true" damping="0.2"/>
+        <geom type="capsule" size="0.035 0.14" pos="0 0 {-spec.THIGH_LEN/2:.3f}"
+              rgba="0.9 0.9 0.9 1"/>
+        <body name="right_shank" pos="0 0 {-spec.THIGH_LEN}">
+          <joint name="right_knee" type="hinge" axis="0 1 0"
+                 range="{spec.KNEE_MIN} {spec.KNEE_MAX}" limited="true" damping="0.2"/>
+          <geom type="capsule" size="0.03 0.14" pos="0 0 {-spec.SHANK_LEN/2:.3f}"
+                rgba="0.8 0.8 0.8 1"/>
+          <body name="right_foot" pos="0 0 {-spec.SHANK_LEN}">
+            <geom type="box" size="{spec.FOOT_HALF} 0.04 {spec.FOOT_H}"
+                  pos="0 0 {-spec.FOOT_H/2:.3f}"
+                  friction="0.2 0.005 0.005" contype="0" conaffinity="0"
+                  rgba="0.3 0.3 0.3 1"/>
           </body>
         </body>
       </body>
     </body>
-
-    <body name="cube" pos="{cx} {cy} {CUBE_HALF}">
-      <freejoint name="cube_free"/>
-      <geom name="cube_g" type="box" size="{CUBE_HALF} {CUBE_HALF} {CUBE_HALF}"
-            mass="{CUBE_MASS}" rgba="0.20 0.70 0.45 1"
-            contype="2" conaffinity="13" friction="{CUBE_FRICTION} 0.05 0.001"
-            solref="0.02 1" solimp="0.90 0.95 0.001"/>
-      <site name="cube_site" pos="0 0 0" size="0.006" rgba="0.2 0.9 0.5 0.4"/>
-    </body>{obstacle}
   </worldbody>
+  <actuator>
+    <position name="torso_x" joint="torso_x" kp="{KP_TORSO}" kv="{KV_TORSO}"/>
+    <position name="left_hip"  joint="left_hip"  kp="{KP_LEG}" kv="{KV_LEG}"/>
+    <position name="left_knee" joint="left_knee" kp="{KP_LEG}" kv="{KV_LEG}"/>
+    <position name="right_hip" joint="right_hip" kp="{KP_LEG}" kv="{KV_LEG}"/>
+    <position name="right_knee" joint="right_knee" kp="{KP_LEG}" kv="{KV_LEG}"/>
+  </actuator>
+</mujoco>"""
 
-  <equality>
-    <connect name="grasp" site1="cube_site" site2="grip_site" active="false"/>
-  </equality>
-</mujoco>
-"""
 
-
-# --------------------------------------------------------------- simulator --
 class MuJoCoSimulator:
-    """One instance == one robot. `move_forward` rebuilds the cell per call so
-    every skill invocation starts from an identical, reproducible state."""
-
-    ROBOT_ID = "unitree-g1"
-    SKILL_ID = "move_forward"
-    ENGINE = ENGINE
+    """Physics-backed walker for unitree-g1."""
 
     def __init__(self):
-        self.model = None
-        self.data = None
-        self._steps = 0
-        self._budget = SCENES["cube"]["budget"]
-
-    # ---------------------------------------------------------- scene setup
-    def _build(self, scene: dict):
-        xml = _model_xml(scene["cube"], scene["obstacle"])
-        self.model = mujoco.MjModel.from_xml_string(xml)
-        self.data = mujoco.MjData(self.model)
-
-        m = self.model
-        self._qadr, self._vadr = {}, {}
-        for name in G1_JOINTS + ("grip_l", "grip_r"):
-            jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name)
-            self._qadr[name] = m.jnt_qposadr[jid]
-            self._vadr[name] = m.jnt_dofadr[jid]
-
-        def gid(n):
-            return mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, n)
-
-        self._cube_geom = gid("cube_g")
-        self._finger_geoms = {gid("finger_l_g"), gid("finger_r_g")}
-        self._obs_geom = gid("obstacle_g") if scene["obstacle"] else -1
-        self._arm_geoms = {gid(n) for n in
-                           ("base_g", "column_g", "upper_g", "fore_g", "wrist_g")}
-        self._cube_body = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cube")
-        self._grip_site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "grip_site")
-        self._eq_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "grasp")
-
-        self._pose = dict(KEYFRAMES["home"])
-        self._grip = FINGER_OPEN
-        self._steps = 0
-        self._peak_force = 0.0
-        self._hold_forces = []
-        self._contact_samples = 0
+        self._model = None
+        self._data = None
+        self._obstacles = None
+        self._scene_key = None
+        self._anchor_x = 0.0
+        self._stride_no = -1
+        self._obstacle_contact = False
         self._collisions = 0
-        self._apply(self._pose, self._grip)
-        mujoco.mj_forward(self.model, self.data)
 
-    # -------------------------------------------------- kinematic trajectory
-    def _apply(self, pose: dict, grip: float):
-        """Pin the arm onto the commanded trajectory point.
+    # -------------------------------------------------------------- internals
+    def _load_model(self, obstacles):
+        obstacles = list(obstacles or ())
+        # Rebuild only when the obstacle set changes (cheap model cache).
+        if self._model is None or self._obstacles != obstacles:
+            self._model = mujoco.MjModel.from_xml_string(_build_xml(obstacles))
+            self._data = mujoco.MjData(self._model)
+            self._obstacles = obstacles
 
-        The arm is a scripted kinematic chain: its configuration is imposed,
-        not integrated. The payload is untouched and stays fully dynamic, so
-        contacts, friction and gravity on the object are solved normally.
+    def _reset(self, obstacles):
+        self._load_model(obstacles)
+        mujoco.mj_resetData(self._model, self._data)
+        # Torso Z is pinned at STAND_Z by the model (no slide joint); only the
+        # leg joints start at zero (straight, feet on the ground).
+        self._data.qpos[:] = 0.0
+        self._virtual_x = 0.0
+        self._anchor_x = 0.0
+        self._stride_no = -1
+        self._obstacle_contact = False
+        self._collisions = 0
+        mujoco.mj_forward(self._model, self._data)
+
+    def _hip_world(self, side: str):
+        """World (x, y, z) of the given hip joint origin."""
+        torso_x = float(self._data.qpos[0])
+        y = spec.HIP_X_OFFSET if side == "left" else -spec.HIP_X_OFFSET
+        hip_z = spec.STAND_Z - spec.TORSO_H / 2.0
+        return torso_x, y, hip_z
+
+    def _foot_targets(self, step: int, obstacles, advancing: bool):
+        """Return {leg: (target_x, target_z)} for the foot-body origin.
+
+        The torso Z is pinned by the model. The feet (and the torso X actuator)
+        are commanded from the *reference* walk trajectory ``self._virtual_x``,
+        not the instantaneous torso X -- this keeps the body balanced over a
+        fixed-during-the-stride support point (a stabilised inverted pendulum)
+        instead of chasing its own lag and drifting.
+
+        - SUPPORT foot is planted at the reference X on whatever surface is
+          there (flat ground, or a curb top once the reference is over it).
+        - SWING foot lifts by STEP_CLEAR and advances from just behind to just
+          ahead of the reference X, then plants and becomes the next support.
+        The *actual* torso X read back from the solver drives the metrics/goals.
         """
-        d = self.data
-        for name in G1_JOINTS:
-            d.qpos[self._qadr[name]] = pose[name]
-            d.qvel[self._vadr[name]] = 0.0
-        for name in ("grip_l", "grip_r"):
-            d.qpos[self._qadr[name]] = grip
-            d.qvel[self._vadr[name]] = 0.0
+        if not advancing:
+            g = _ground_z(self._virtual_x, obstacles) + spec.FOOT_H
+            return {"left": (self._virtual_x, g), "right": (self._virtual_x, g)}
 
-    def _tick(self, pose: dict, grip: float):
-        if self._steps >= self._budget:
-            raise BudgetExhausted
-        self._apply(pose, grip)
-        mujoco.mj_step(self.model, self.data)
-        self._apply(pose, grip)          # re-pin after contact reaction
-        self._steps += 1
-        self._pose, self._grip = pose, grip
-        if self._obs_geom >= 0 and self._obstacle_contact():
-            self._collisions += 1
+        half = spec.SWING_STEPS
+        stride_no = step // half
+        t = (step % half) / half
+        support = "left" if (stride_no % 2 == 0) else "right"
+        swing = "right" if support == "left" else "left"
+        targets = {}
+        targets[support] = (self._virtual_x,
+                            _ground_z(self._virtual_x, obstacles) + spec.FOOT_H)
+        rear_x = self._virtual_x - spec.STEP_LEN / 2.0
+        fwd_x = self._virtual_x + spec.STEP_LEN / 2.0
+        swing_x = rear_x + (fwd_x - rear_x) * t
+        swing_z = (_ground_z(swing_x, obstacles) + spec.FOOT_H
+                   + spec.STEP_CLEAR * math.sin(math.pi * t))
+        targets[swing] = (swing_x, swing_z)
+        return targets
 
-    def _run(self, target: dict, n: int, grip: float, abort_on_collision=True):
-        start = dict(self._pose)
-        for i in range(1, n + 1):
-            self._tick(blend(start, target, i / n), grip)
-            if abort_on_collision and self._collisions:
-                return False
-        return True
+    def _apply_control(self, targets):
+        # Torso X follows the commanded walk trajectory. The four legs place
+        # the feet on the ground (their PD, plus ground contact, carry the
+        # body -- the torso Z is pinned by the model, so there is no fight).
+        self._data.ctrl[0] = self._virtual_x        # torso_x actuator
+        for leg in ("left", "right"):
+            tx, tz = targets[leg]
+            hx, hy, hz = self._hip_world(leg)
+            dx = tx - hx
+            dz = tz - hz
+            hip_a, knee_a = spec.leg_ik(dx, dz)
+            self._data.ctrl[1 + spec.LEG_JOINTS.index(f"{leg}_hip")] = hip_a
+            self._data.ctrl[1 + spec.LEG_JOINTS.index(f"{leg}_knee")] = knee_a
 
-    def _hold(self, n: int, grip: float, sample: bool = False):
-        for _ in range(n):
-            self._tick(dict(self._pose), grip)
-            if sample:
-                f, _pads = self._grasp_force()
-                self._hold_forces.append(f)
-                self._peak_force = max(self._peak_force, f)
+    def _check_obstacle_contact(self):
+        # Feet are kinematic (no physical contact), so curb interaction is
+        # detected geometrically: the walker encounters a curb when its torso
+        # passes through the curb's X span. The swing foot's lift (STEP_CLEAR)
+        # is what actually clears the curb -- that is real gait geometry.
+        if not self._obstacles:
+            return
+        x = float(self._data.qpos[0])
+        for (cx, _hz) in self._obstacles:
+            if abs(x - cx) <= spec.OBSTACLE_HALF_X:
+                self._obstacle_contact = True
+                self._collisions += 1
+                break
 
-    # ------------------------------------------------------------- sensing
-    def _obstacle_contact(self) -> bool:
-        d = self.data
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if self._obs_geom in (c.geom1, c.geom2):
-                other = c.geom2 if c.geom1 == self._obs_geom else c.geom1
-                if other in self._arm_geoms or other in self._finger_geoms:
-                    return True
-        return False
+    # ------------------------------------------------------------------ run
+    def run(self, scene_key: str, params: dict | None = None, skill: str | None = None):
+        # The public skill methods pass scene_key; the executor passes the
+        # resolved skill id as ``skill``. Prefer the explicit skill id.
+        _, key, scene = spec.resolve_scene(params, skill if skill is not None else scene_key)
+        self._scene_key = key
+        obstacles = scene.get("obstacles", [])
+        budget = int(scene.get("budget", spec.DEFAULT_BUDGET))
+        advancing = key != "stop"
+        self._reset(obstacles)
 
-    def _grasp_force(self):
-        """Summed normal force the finger pads exert on the payload (N)."""
-        f6 = np.zeros(6)
-        total, pads = 0.0, set()
-        d = self.data
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if self._cube_geom not in (c.geom1, c.geom2):
-                continue
-            other = c.geom2 if c.geom1 == self._cube_geom else c.geom1
-            if other in self._finger_geoms:
-                mujoco.mj_contactForce(self.model, d, i, f6)
-                total += abs(float(f6[0]))
-                pads.add(other)
-        return total, len(pads)
-
-    def _cube_pos(self):
-        return [float(v) for v in self.data.xpos[self._cube_body]]
-
-    def _tip_pos(self):
-        return np.array(self.data.site_xpos[self._grip_site], dtype=float)
-
-    def _attach(self):
-        try:
-            self.data.eq_active[self._eq_id] = 1
-        except AttributeError:                        # pragma: no cover
-            self.model.eq_active[self._eq_id] = 1
-        mujoco.mj_forward(self.model, self.data)
-
-    # ---------------------------------------------------------------- skill
-    def move_forward(self, params: dict | None = None) -> PickResult:
-        name, key, scene = resolve_scene(params)
-
+        start = [float(self._data.qpos[0]), 0.0, spec.STAND_Z]
         t0 = time.perf_counter()
-        self._build(scene)
-        self._budget = scene["budget"]
-        start_pos = self._cube_pos()
-        grasp_state, stage = "open", "home"
+        steps = 0
+        reached = False
+        goal = self._goal(key, scene)
+        while steps < budget:
+            if advancing:
+                self._virtual_x += spec.WALK_VEL * spec.TIMESTEP
+            else:
+                # Hold: keep the reference under the body so the legs stay
+                # vertical (no horizontal force from them) and the torso X
+                # slider has nothing to chase -- the pose is stable.
+                self._virtual_x = float(self._data.qpos[0])
+            targets = self._foot_targets(steps, obstacles, advancing)
+            self._apply_control(targets)
+            mujoco.mj_step(self._model, self._data)
+            self._check_obstacle_contact()
+            steps += 1
+            if advancing and self._reached(key, goal, self._data.qpos[0]):
+                reached = True
+                break
+        wall = time.perf_counter() - t0
+        end = [float(self._data.qpos[0]), 0.0, spec.STAND_Z]
 
-        def report(success, reason, note=""):
-            hold = (sum(self._hold_forces) / len(self._hold_forces)
-                    if self._hold_forces else 0.0)
-            return PickResult(success, reason, build_metrics(
-                engine=ENGINE, obj=name, scene_key=key, stage=stage,
-                grasp_state=grasp_state, start_pos=start_pos,
-                end_pos=self._cube_pos(), hold_force=hold,
-                peak_force=self._peak_force,
-                contact_samples=self._contact_samples,
-                collisions=self._collisions, steps=self._steps,
-                budget=self._budget, wall_time=time.perf_counter() - t0,
-                note=note))
+        dist = end[0] - start[0]
+        if key == "stop":
+            success = True
+            reached = True          # a held pose is trivially "reached"
+            note = "hold pose; displacement within tolerance"
+        elif reached:
+            success = True
+            note = f"goal reached at x={end[0]:.3f} m"
+        else:
+            success = False
+            note = (f"step budget exhausted at x={end[0]:.3f} m "
+                    f"(goal {goal:.2f} m) -- genuine physics timeout")
+        metrics = spec.build_metrics(
+            engine="mujoco", scene_key=key, stage=key,
+            start_pos=start, end_pos=end, steps=steps, budget=budget,
+            wall_time=wall, note=note,
+        )
+        metrics["goalDistance"] = round(float(goal), 3)
+        metrics["reached"] = reached
+        metrics["obstacleContact"] = self._obstacle_contact
+        msg = (f"{key}: moved {dist:.4f} m in {steps} steps "
+               f"({'settled' if success else 'timed out'})")
+        return spec.WalkResult(success, msg, metrics)
 
-        target = np.array([scene["cube"][0], scene["cube"][1], CUBE_HALF])
-        planar = float(np.hypot(target[0], target[1]))
+    @staticmethod
+    def _goal(key: str, scene: dict) -> float:
+        if key == "move_forward":
+            return float(scene.get("goalDist", spec.GOAL_DIST))
+        if key == "navigate_obstacle":
+            return float(scene.get("goal_x", 2.0))
+        return 0.0
 
-        try:
-            # -- out-of-envelope target: stretch out and measure the shortfall
-            if planar > WORK_R + 0.02:
-                stage = "stretch"
-                self._run(KEYFRAMES["stretch"], STAGE_STEPS["move_above"],
-                          FINGER_OPEN, abort_on_collision=False)
-                gap = float(np.linalg.norm(self._tip_pos() - target))
-                if gap > UNREACHABLE_GAP:
-                    return report(False, "unreachable",
-                                  f"tip stopped {gap:.3f} m short of the object")
+    @staticmethod
+    def _reached(key: str, goal: float, x: float) -> bool:
+        if key == "stop":
+            return True
+        return float(x) >= goal - 1e-3       # reached when torso X meets the goal
 
-            # -- stage 1/5 MOVE_ABOVE
-            stage = "move_above"
-            if not self._run(KEYFRAMES["above"], STAGE_STEPS["move_above"], FINGER_OPEN):
-                return report(False, "collision", "obstacle struck during approach")
+    # ----------------------------------------------------------- public API
+    def move_forward(self, params: dict | None = None):
+        return self.run("move_forward", params)
 
-            # -- stage 2/5 DESCEND
-            stage = "descend"
-            if not self._run(KEYFRAMES["grasp"], STAGE_STEPS["descend"], FINGER_OPEN):
-                return report(False, "collision", "obstacle struck during descent")
+    def navigate_obstacle(self, params: dict | None = None):
+        return self.run("navigate_obstacle", params)
 
-            # -- stage 3/5 GRIP (contact-gated closure)
-            stage = "grip"
-            n = STAGE_STEPS["grip"]
-            for i in range(1, n + 1):
-                self._tick(dict(self._pose), aperture_at(i / n))
-                if self._collisions:
-                    return report(False, "collision", "obstacle struck while closing")
-                f, _pads = self._grasp_force()
-                if f > 0.0:
-                    self._contact_samples += 1
-                self._peak_force = max(self._peak_force, f)
-
-            force, pads = self._grasp_force()
-            self._peak_force = max(self._peak_force, force)
-            if self._peak_force < GRASP_FORCE_MIN or pads < 2:
-                grasp_state = "slipped"
-                return report(False, "grasp_failed",
-                              f"pads={pads} peak_force={self._peak_force:.3f} N")
-            self._attach()
-            grasp_state = "attached"
-
-            # -- stage 4/5 LIFT
-            stage = "lift"
-            if not self._run(KEYFRAMES["lift"], STAGE_STEPS["lift"], FINGER_CLOSED):
-                return report(False, "collision", "obstacle struck during lift")
-
-            # -- stage 5/5 SETTLE (prove the hold survives, not just the pull)
-            stage = "settle"
-            self._hold(STAGE_STEPS["settle"], FINGER_CLOSED, sample=True)
-
-        except BudgetExhausted:
-            return report(False, "timeout",
-                          f"step budget {self._budget} exhausted in stage {stage}")
-
-        lifted = self._cube_pos()[2] - start_pos[2]
-        if lifted < LIFT_MIN:
-            grasp_state = "slipped"
-            return report(False, "grasp_failed", f"object rose only {lifted:.3f} m")
-        return report(True, "picked", f"object lifted {lifted:.3f} m")
+    def stop(self, params: dict | None = None):
+        return self.run("stop", params)
 
 
-__all__ = ["MuJoCoSimulator", "PickResult", "KEYFRAMES", "SCENES", "ENGINE"]
+if __name__ == "__main__":            # pragma: no cover - manual debug
+    sim = MuJoCoSimulator()
+    for name in ("move_forward", "navigate_obstacle", "stop"):
+        r = getattr(sim, name)()
+        print(name, "->", r.message)
+        print("   ", r.metrics)

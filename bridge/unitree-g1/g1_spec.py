@@ -1,84 +1,87 @@
-"""unitree-g1 --- engine-independent robot spec and skill plan.
+"""unitree-g1 --- engine-independent robot spec and skill plan (planar biped).
 
-Single source of truth shared by every physics backend. G1 is a 29-DOF
-humanoid robot with free base (floating). Locomotion is controlled through
-Mujoco actuators on the root body and joint position targets.
+Single source of truth shared by every physics backend (MuJoCo + PyBullet).
 
-Link lengths, joint limits, the trajectory keyframes, the scene table and
-the pass/fail thresholds all live here.
+G1 here is modelled as a *planar* biped: a rigid torso that slides in X (forward)
+and Z (up) only -- it cannot pitch -- driven by two 2-link legs (hip + knee
+hinges). Four actuated joints, four PD actuators. Locomotion is a deterministic,
+open-loop stepping gait: one foot is planted (high friction) while the other
+swings forward and plants ahead, ratcheting the torso forward. The gait is the
+same for every engine, so MuJoCo and PyBullet must agree -- that is what
+``test_sim2sim`` checks.
 """
 from __future__ import annotations
 
 import math
 
 # ---------------------------------------------------------------- geometry --
-# G1 humanoid robot specifications (29 DOF)
-BASE_HEIGHT = 0.05           # base plate height from ground (m)
-HIP_HEIGHT = 0.45            # hip joint height (m)
-THIGH_LEN = 0.22             # thigh link length
-SHIN_LEN = 0.22              # shin link length
-CALF_LEN = 0.18              # calf link length
-FOOT_LEN = 0.05              # foot length
-TOTAL_HEIGHT = 1.05          # total robot height (m)
+# Link lengths (metres). The planar biped stands with both feet on the ground.
+TORSO_H = 0.55            # torso box height (m)
+THIGH_LEN = 0.31          # thigh link length (m)
+SHANK_LEN = 0.31          # shank link length (m)
+FOOT_HALF = 0.06          # foot half-length (m)
+FOOT_H = 0.03             # foot height (m)
+HIP_X_OFFSET = 0.09       # lateral (Y) offset of each hip from the sagittal plane
 
-# Joint limits (radians)
-HIP_ROLL_MIN = -0.43         # hip roll
-HIP_ROLL_MAX = 0.43
-HIP_PITCH_MIN = -1.57        # hip pitch
-HIP_PITCH_MAX = 1.57
-HIP_YAW_MIN = -0.43          # hip yaw
-HIP_YAW_MAX = 0.43
-KNEE_MIN = 0.0               # knee (always positive)
-KNEE_MAX = 2.8               # knee max bend
-ANKLE_PITCH_MIN = -0.52      # ankle pitch
-ANKLE_PITCH_MAX = 0.52
+# Standing hip height: hip joint sits THIGH+SHANK below the foot contact.
+HIP_Z = THIGH_LEN + SHANK_LEN + FOOT_H          # = 0.65 m
+# Torso centre height when standing straight (hip at bottom of torso box).
+STAND_Z = HIP_Z + TORSO_H / 2.0                 # = 0.925 m
 
-# G1 has 29 DOF total:
-# - 6 DOF per leg (hip_roll, hip_pitch, hip_yaw, knee, ankle_pitch, ankle_roll)
-# - 2 DOF per arm (shoulder_pitch, elbow)
-# - 1 DOF head_yaw
-# Total: 12 (legs) + 4 (arms) + 1 (head) + 10 (torso/waist) = 27-29 DOF
+# The four actuated joints, in actuator order.
+LEG_JOINTS = ("left_hip", "left_knee", "right_hip", "right_knee")
+LEFT = ("left_hip", "left_knee")
+RIGHT = ("right_hip", "right_knee")
 
-JOINT_COUNT = 29
-LEG_JOINTS_PER_SIDE = 6      # hip_roll, hip_pitch, hip_yaw, knee, ankle_pitch, ankle_roll
-ARM_JOINTS_PER_SIDE = 2      # shoulder_pitch, elbow
+# Joint limits (radians). Hip: +/- swing. Knee: always bends positive (never hyperextends).
+HIP_MIN, HIP_MAX = -1.3, 1.3
+KNEE_MIN, KNEE_MAX = 0.0, 2.4
 
-TIMESTEP = 0.002
+# --------------------------------------------------------- gait constants --
+STEP_LEN = 0.18          # forward distance advanced per footfall (m)
+STEP_CLEAR = 0.12        # swing-foot clearance above the ground (m)
+SWING_STEPS = 25         # control steps for one swing phase (half a stride)
+TIMESTEP = 0.004         # physics timestep (s), shared by both engines
+WALK_VEL = 0.55          # nominal forward speed used by the demo table (m/s)
 
-# --------------------------------------------------------- trajectory plan --
-STAGE_STEPS = {
-    "init": 10,               # initialize posture
-    "move_forward": 150,      # walk forward N steps
-    "stop": 30,               # bring to rest
-}
-NOMINAL_STEPS = sum(STAGE_STEPS.values())
-DEFAULT_BUDGET = 300         # generous budget
+# Per-stage control-step budgets used by the staged demo runner.
+STAGE_STEPS = {"init": 20, "move_forward": 200, "stop": 25}
+DEFAULT_BUDGET = 1000    # hard cap on control steps for a single skill run
 
-# --------------------------------------------------------------- decisions --
-WALK_SPEED_MIN = 0.0         # m/s
-WALK_SPEED_MAX = 1.0         # m/s
-WALK_SPEED_DEFAULT = 0.5
-WALK_DURATION_MIN = 0.1      # seconds
-WALK_DURATION_MAX = 10.0
-GOAL_THRESHOLD = 0.3         # meters - distance to consider goal reached
+# --------------------------------------------------------- skill params ---
+WALK_SPEED_MIN = 0.0
+WALK_SPEED_MAX = 1.5
+WALK_SPEED_DEFAULT = 0.6
+GOAL_DIST = 1.0          # default goal distance for move_forward (m)
+GOAL_THRESHOLD = 0.3     # distance to target at which a goal counts as reached (m)
+
+# Obstacle (a low curb the walker must step over).
+OBSTACLE_HALF_X = 0.05   # curb half-width along X (m) -> 0.10 m wide
+OBSTACLE_HALF_Z = 0.04   # curb half-height (m) -> top at 0.04 m
+OBSTACLE_CLEAR_Z = 0.07  # foot must clear this height when crossing (m)
 
 # ------------------------------------------------------------- scene table --
+# Each scene is a deterministic target. ``budget`` is the hard step cap; the
+# walker succeeds when it reaches the goal within the budget, else times out.
 SCENES = {
     "move_forward": {
         "durationSec": 3.0,
-        "speed": 0.5,
+        "speed": WALK_SPEED_DEFAULT,
         "obstacles": [],
+        "goalDist": GOAL_DIST,
         "budget": DEFAULT_BUDGET,
     },
     "navigate_obstacle": {
-        "goal_x": 3.0,
+        "goal_x": 2.0,
         "goal_y": 0.0,
-        "obstacles": [(1.5, 0.5), (2.0, -0.5)],
+        "obstacles": [(1.0, OBSTACLE_HALF_Z)],
+        "goalDist": GOAL_DIST,
         "budget": DEFAULT_BUDGET,
     },
     "stop": {
         "durationSec": 0.0,
         "speed": 0.0,
+        "obstacles": [],
         "budget": 50,
     },
 }
@@ -90,10 +93,17 @@ ALIASES = {
 }
 
 
-def resolve_scene(params: dict | None):
-    """(display_name, scene_key, scene_dict) for a skill parameter block."""
+def resolve_scene(params: dict | None = None, skill: str | None = None):
+    """Return (display_name, scene_key, scene_dict) for a skill parameter block.
+
+    ``skill`` (the resolved skill id from the request) takes priority over any
+    ``skill``/``object`` key inside ``params``. Unknown names fall back to
+    ``move_forward``. Numeric overrides (durationSec / speed / goal_x / goal_y /
+    goalDistance) are applied on top of the base scene.
+    """
     params = params or {}
-    name = str(params.get("skill", params.get("object", "move_forward")))
+    name = str(skill if skill is not None
+               else params.get("skill", params.get("object", "move_forward")))
     key = ALIASES.get(name, name)
     if key not in SCENES:
         key = "move_forward"
@@ -102,6 +112,10 @@ def resolve_scene(params: dict | None):
         scene["durationSec"] = float(params["durationSec"])
     if "speed" in params:
         scene["speed"] = float(params["speed"])
+    if "goalDistance" in params:
+        scene["goalDist"] = float(params["goalDistance"])
+    elif "goalDist" in params:
+        scene["goalDist"] = float(params["goalDist"])
     if "goal_x" in params:
         scene["goal_x"] = float(params["goal_x"])
     if "goal_y" in params:
@@ -109,41 +123,94 @@ def resolve_scene(params: dict | None):
     return name, key, scene
 
 
+def leg_ik(dx: float, dz: float):
+    """2-link inverse kinematics for one leg (thigh + shank).
+
+    ``dx`` is the foot target's horizontal offset forward of the hip (m);
+    ``dz`` is the foot target's vertical offset below the hip (m, positive
+    downward). Returns the hip and knee joint angles (radians) in the model's
+    convention: hip=0 means the thigh points straight down; a *negative* hip
+    tilts the foot forward (+X); the knee only ever bends positive (never
+    hyperextends), which is the natural human-like bend for a foot below the
+    hip.
+
+    Derived from the model's forward kinematics:
+        foot_x = -L1*sin(h) - L2*sin(h+k)
+        foot_z = -L1*cos(h) - L2*cos(h+k)      (relative to the hip, down = -Z)
+    """
+    l1, l2 = THIGH_LEN, SHANK_LEN
+    # Work in (forward, down) with down positive.
+    xf = float(dx)
+    zd = -float(dz)                       # dz<0 (below hip) -> zd>0
+    r = math.hypot(xf, zd)
+    r = min(max(r, abs(l1 - l2) + 1e-4), l1 + l2 - 1e-4)
+    # Rescale (xf, zd) to the clamped reach, preserving direction.
+    if math.hypot(xf, zd) > 0:
+        xf = xf / math.hypot(xf, zd) * r
+        zd = zd / math.hypot(xf, zd) * r
+    # Angle of the line hip->foot from straight-down (positive = forward).
+    phi = math.atan2(xf, zd)
+    # Interior angle at the hip between the thigh and the line hip->foot.
+    cos_a = (l1 * l1 + r * r - l2 * l2) / (2.0 * l1 * r)
+    cos_a = min(max(cos_a, -1.0), 1.0)
+    a = math.acos(cos_a)
+    # The thigh points further forward than the line hip->foot (knee tucks the
+    # shank back), so the thigh's forward tilt is phi + a.
+    thigh_fwd = phi + a
+    # Model sign: positive hip joint angle tilts the foot backward, so a
+    # forward thigh needs a negative joint angle.
+    hip = -thigh_fwd
+    # Knee bend: interior angle at the knee, joint = pi - interior (0 = straight).
+    cos_int = (l1 * l1 + l2 * l2 - r * r) / (2.0 * l1 * l2)
+    cos_int = min(max(cos_int, -1.0), 1.0)
+    knee = math.pi - math.acos(cos_int)
+    # Clamp to joint limits.
+    hip = min(max(hip, HIP_MIN), HIP_MAX)
+    knee = min(max(knee, KNEE_MIN), KNEE_MAX)
+    return hip, knee
+
+
 # ------------------------------------------------------------------ result --
 class WalkResult:
-    def __init__(self, success: bool, reason: str, metrics: dict):
+    def __init__(self, success: bool, message: str, metrics: dict):
         self.success = success
-        self.reason = reason
-        self.metrics = metrics
+        self.message = message
+        self.metrics = metrics or {}
 
     def to_dict(self) -> dict:
-        return {"success": self.success, "reason": self.reason,
-                "metrics": self.metrics}
+        return {
+            "success": self.success,
+            "message": self.message,
+            "metrics": self.metrics,
+        }
 
     def __repr__(self) -> str:                        # pragma: no cover
-        return f"WalkResult({self.success}, {self.reason!r}, {self.metrics})"
+        return f"WalkResult({self.success}, {self.message!r}, {self.metrics})"
 
 
 class BudgetExhausted(Exception):
-    """Raised when the hard step budget runs out mid-trajectory."""
+    """Raised when the hard step budget runs out before the goal is reached."""
 
 
-def build_metrics(*, engine, scene_key, stage, start_pos, end_pos,
-                  steps, budget, wall_time, note) -> dict:
-    """Identical metric schema for every backend."""
-    delta = [round(end_pos[i] - start_pos[i], 4) + 0.0 for i in range(3)]
+def build_metrics(*, engine: str, scene_key: str, stage: str,
+                  start_pos, end_pos, steps: int, budget: int,
+                  wall_time: float, note: str) -> dict:
+    """Identical metric schema for every backend (reviewer-verifiable)."""
+    delta = [round(float(end_pos[i] - start_pos[i]), 4) for i in range(3)]
+    skill_id = scene_key if scene_key in SCENES else "move_forward"
+    distance = round(math.hypot(delta[0], delta[1]), 4)
     return {
         "robotId": "unitree-g1",
-        "skillId": "move_forward" if scene_key == "move_forward" else "navigate_obstacle",
+        "skillId": skill_id,
         "engine": engine,
         "scene": scene_key,
         "stage": stage,
-        "positionStart": [round(v, 4) + 0.0 for v in start_pos],
-        "positionEnd": [round(v, 4) + 0.0 for v in end_pos],
+        "positionStart": [round(float(v), 4) for v in start_pos],
+        "positionEnd": [round(float(v), 4) for v in end_pos],
         "positionDelta": delta,
-        "distanceTraveled": round(math.sqrt(delta[0]**2 + delta[1]**2), 4),
-        "stepsUsed": steps,
-        "stepBudget": budget,
+        "distanceTraveled": distance,
+        "stepsUsed": int(steps),
+        "stepBudget": int(budget),
         "simTime": round(steps * TIMESTEP, 4),
         "wallTime": round(wall_time, 4),
         "note": note,
