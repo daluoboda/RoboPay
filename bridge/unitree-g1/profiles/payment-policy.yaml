@@ -1,9 +1,25 @@
 # unitree-g1 payment policy
 schemaVersion: payment-policy.v1
 
-provider: x402
-network: eip155:84532  # Base Sepolia
-token: USDC
+provider:
+  scheme: exact
+  protocol: x402
+  network: eip155:84532          # Base Sepolia
+  chainId: 84532
+  asset:
+    address: "0x036CbD53842c5426634e7929541E2318f3dCF7e"   # Base Sepolia USDC
+    symbol: USDC
+    decimals: 6
+  amount: "0.10"
+  currency: USDC
+  version: "1"
+  payToAddressEnv: UNITREE_G1_PAYTO_ADDRESS
+
+challenge:
+  resource: "robopay://unitree-g1-arm-001/{skill}"
+  description: "Pay-to-actuate unitree-g1 locomotion skill"
+  maxTimeoutSeconds: 300
+  headerIn: "X-PAYMENT"
 
 lifecycle:
   - phase: request
@@ -20,8 +36,8 @@ lifecycle:
     description: Payment settled after successful execution
 
 safety:
+  settleOnFailure: false
   failClosed: true
-  noSettleOnFailure: true
   idempotencyKeyRequired: true
   replayProtection: true
 

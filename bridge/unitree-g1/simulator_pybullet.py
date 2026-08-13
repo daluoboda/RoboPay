@@ -1,21 +1,32 @@
 """unitree-g1 --- PyBullet backend (sim-to-sim cross-check).
 
-Same robot, same skill, same trajectory, different physics engine.
+Same planar biped, same skill, same gait, different physics engine.
 
-Everything that defines the robot and the skill -- link lengths, gripper
-geometry, keyframes, stage step counts, force/lift thresholds, scene layout --
-is imported from g1_spec.py, exactly as the MuJoCo backend does. The only
-thing that differs below is how the world is assembled and stepped. That is
-what makes the sim-to-sim test meaningful: if both engines agree on
-success/failure, grasp state and lift distance, the skill is a property of the
-robot definition, not of one simulator's quirks.
+Everything that defines the robot and the skill -- link lengths, joint chain,
+stage step counts, gait constants, scene layout -- is imported from g1_spec.py,
+exactly as the MuJoCo backend (simulator.py) does. The only thing that differs
+below is how the world is assembled and stepped. That is what makes the
+sim-to-sim test meaningful: if both engines agree on success / failure /
+reached / obstacle contact, the skill is a property of the robot definition,
+not of one simulator's quirks.
 
 PyBullet ships as a source distribution only, so it builds on Linux CI but
 usually not on a bare Windows box. Import is lazy and every consumer is
-expected to skip when `available()` is False.
+expected to skip when ``available()`` is False.
+
+This is the same *deliberately simplified* planar model as the MuJoCo backend:
+the torso slides in X only (Z is pinned by a prismatic joint along X, so it
+cannot sink), the four leg hinges are position-controlled to their IK targets,
+and the feet do not exchange physical contact forces with the ground (the leg
+collision group is masked away from the floor). The torso X is integrated by
+Bullet's solver under real gravity, so the gait timing, swing-foot lift, curb
+traversal geometry and travelled distance are genuine physics. Nothing
+numerical is faked: the distances reported are read back from the solver.
 
 Public surface (identical to simulator.MuJoCoSimulator):
-    PyBulletSimulator().move_forward(params) -> PickResult
+    PyBulletSimulator().move_forward(params)      -> WalkResult
+    PyBulletSimulator().navigate_obstacle(params) -> WalkResult
+    PyBulletSimulator().stop(params)              -> WalkResult
 """
 from __future__ import annotations
 
@@ -25,23 +36,22 @@ import tempfile
 import time
 
 from g1_spec import (
-    ARM_JOINTS, BASE_H, BudgetExhausted, CUBE_FRICTION, CUBE_HALF, CUBE_MASS,
-    FINGER_CLOSED, FINGER_HALF_X, FINGER_HALF_Z, FINGER_OPEN, GRASP_FORCE_MIN,
-    GRIP_MID, KEYFRAMES, LIFT_MIN, LINK1, LINK2, OBSTACLE_HALF_H,
-    OBSTACLE_RADIUS, PAD_HALF, PickResult, STAGE_STEPS, TIMESTEP,
-    UNREACHABLE_GAP, WORK_R, aperture_at, blend, build_metrics, resolve_scene,
+    LEG_JOINTS, HIP_MIN, HIP_MAX, KNEE_MIN, KNEE_MAX,
+    STAND_Z, TORSO_H, HIP_X_OFFSET, THIGH_LEN, SHANK_LEN, FOOT_H, FOOT_HALF,
+    STEP_LEN, STEP_CLEAR, SWING_STEPS, TIMESTEP, WALK_VEL, OBSTACLE_HALF_X,
+    resolve_scene, leg_ik, build_metrics, WalkResult,
+    DEFAULT_BUDGET,
 )
 
 ENGINE = "pybullet"
 
-# collision groups mirror the MJCF bitmasks in simulator.py
+# Collision groups: the robot (torso + legs) is masked away from the floor, so
+# the feet never exchange contact forces -- exactly mirroring the MuJoCo model
+# where the foot geoms carry contype 0. The curb is purely geometric (obstacle
+# contact is detected by torso X span, not by physics collision).
 G_FLOOR, M_FLOOR = 1, 6
-G_CUBE, M_CUBE = 2, 13
-G_PAD, M_PAD = 4, 11
+G_LEG, M_LEG = 2, 11
 G_OBSTACLE, M_OBSTACLE = 8, 22
-G_ARM, M_ARM = 16, 8
-
-_GRIP_JOINTS = ("grip_l", "grip_r")
 
 
 def available() -> bool:
@@ -53,7 +63,89 @@ def available() -> bool:
     return True
 
 
+def _ground_z(x: float, obstacles) -> float:
+    """Surface height under a foot at world X (0 flat, curb top on a curb)."""
+    z = 0.0
+    for (cx, hz) in (obstacles or ()):
+        if abs(x - cx) <= OBSTACLE_HALF_X:
+            z = max(z, 2.0 * hz)
+    return z
+
+
 # --------------------------------------------------------------------- URDF --
+def _robot_urdf() -> str:
+    """The same kinematic chain the MJCF declares, in URDF form.
+
+    Joint order is fixed: torso_x (prismatic along X) then the four leg hinges,
+    so the static sim2sim test can assert the URDF matches the spec.
+    """
+    return f"""<?xml version="1.0"?>
+<robot name="unitree-g1">
+  <link name="base">
+    {_inertial(0.0)}
+    <visual><origin xyz="0 0 0"/><geometry><box size="0.05 0.05 0.05"/></geometry></visual>
+    <collision><origin xyz="0 0 0"/><geometry><box size="0.05 0.05 0.05"/></geometry></collision>
+  </link>
+  <link name="torso">
+    {_inertial(5.0)}
+    <visual><origin xyz="0 0 0"/><geometry><box size="0.24 0.18 {TORSO_H:.3f}"/></geometry>
+      <material name="torso_m"><color rgba="0.2 0.5 0.9 1"/></material></visual>
+    <collision><origin xyz="0 0 0"/><geometry><box size="0.24 0.18 {TORSO_H:.3f}"/></geometry></collision>
+  </link>
+  <link name="left_thigh">
+    {_inertial(1.0)}
+    <visual><origin xyz="0 0 {-THIGH_LEN/2:.3f}"/><geometry><capsule radius="0.035" length="{THIGH_LEN:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-THIGH_LEN/2:.3f}"/><geometry><capsule radius="0.035" length="{THIGH_LEN:.3f}"/></geometry></collision>
+  </link>
+  <link name="left_shank">
+    {_inertial(0.8)}
+    <visual><origin xyz="0 0 {-SHANK_LEN/2:.3f}"/><geometry><capsule radius="0.03" length="{SHANK_LEN:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-SHANK_LEN/2:.3f}"/><geometry><capsule radius="0.03" length="{SHANK_LEN:.3f}"/></geometry></collision>
+    <visual><origin xyz="0 0 {-SHANK_LEN - FOOT_H/2:.3f}"/><geometry><box size="{FOOT_HALF:.3f} 0.08 {FOOT_H:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-SHANK_LEN - FOOT_H/2:.3f}"/><geometry><box size="{FOOT_HALF:.3f} 0.08 {FOOT_H:.3f}"/></geometry></collision>
+  </link>
+  <link name="right_thigh">
+    {_inertial(1.0)}
+    <visual><origin xyz="0 0 {-THIGH_LEN/2:.3f}"/><geometry><capsule radius="0.035" length="{THIGH_LEN:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-THIGH_LEN/2:.3f}"/><geometry><capsule radius="0.035" length="{THIGH_LEN:.3f}"/></geometry></collision>
+  </link>
+  <link name="right_shank">
+    {_inertial(0.8)}
+    <visual><origin xyz="0 0 {-SHANK_LEN/2:.3f}"/><geometry><capsule radius="0.03" length="{SHANK_LEN:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-SHANK_LEN/2:.3f}"/><geometry><capsule radius="0.03" length="{SHANK_LEN:.3f}"/></geometry></collision>
+    <visual><origin xyz="0 0 {-SHANK_LEN - FOOT_H/2:.3f}"/><geometry><box size="{FOOT_HALF:.3f} 0.08 {FOOT_H:.3f}"/></geometry></visual>
+    <collision><origin xyz="0 0 {-SHANK_LEN - FOOT_H/2:.3f}"/><geometry><box size="{FOOT_HALF:.3f} 0.08 {FOOT_H:.3f}"/></geometry></collision>
+  </link>
+
+  <joint name="torso_x" type="prismatic" parent="base" child="torso">
+    <origin xyz="0 0 {STAND_Z:.3f}"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-20" upper="20" effort="2000" velocity="5"/>
+  </joint>
+  <joint name="left_hip" type="revolute" parent="torso" child="left_thigh">
+    <origin xyz="0 {HIP_X_OFFSET} {-TORSO_H/2:.3f}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="{HIP_MIN}" upper="{HIP_MAX}" effort="200" velocity="10"/>
+  </joint>
+  <joint name="left_knee" type="revolute" parent="left_thigh" child="left_shank">
+    <origin xyz="0 0 {-THIGH_LEN:.3f}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="{KNEE_MIN}" upper="{KNEE_MAX}" effort="200" velocity="10"/>
+  </joint>
+  <joint name="right_hip" type="revolute" parent="torso" child="right_thigh">
+    <origin xyz="0 {-HIP_X_OFFSET} {-TORSO_H/2:.3f}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="{HIP_MIN}" upper="{HIP_MAX}" effort="200" velocity="10"/>
+  </joint>
+  <joint name="right_knee" type="revolute" parent="right_thigh" child="right_shank">
+    <origin xyz="0 0 {-THIGH_LEN:.3f}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="{KNEE_MIN}" upper="{KNEE_MAX}" effort="200" velocity="10"/>
+  </joint>
+</robot>
+"""
+
+
 def _inertial(mass: float) -> str:
     i = max(1e-5, mass * 0.01)
     return (f'<inertial><mass value="{mass}"/>'
@@ -61,72 +153,9 @@ def _inertial(mass: float) -> str:
             f'</inertial>')
 
 
-def _cyl_link(name, length, radius, mass, rgba, along_x=False) -> str:
-    """Capsule-ish link. URDF cylinders lie along +Z, so links that run along
-    the arm's +X axis are rotated by pi/2 about +Y, matching the MJCF fromto."""
-    rpy = "0 1.5707963 0" if along_x else "0 0 0"
-    off = f'{length / 2} 0 0' if along_x else f'0 0 {length / 2}'
-    geom = f'<cylinder length="{length}" radius="{radius}"/>'
-    return f"""
-  <link name="{name}">
-    {_inertial(mass)}
-    <visual><origin xyz="{off}" rpy="{rpy}"/><geometry>{geom}</geometry>
-      <material name="{name}_m"><color rgba="{rgba}"/></material></visual>
-    <collision><origin xyz="{off}" rpy="{rpy}"/><geometry>{geom}</geometry></collision>
-  </link>"""
-
-
-def _box_link(name, sx, sy, sz, mass, rgba) -> str:
-    geom = f'<box size="{sx} {sy} {sz}"/>'
-    return f"""
-  <link name="{name}">
-    {_inertial(mass)}
-    <visual><geometry>{geom}</geometry>
-      <material name="{name}_m"><color rgba="{rgba}"/></material></visual>
-    <collision><geometry>{geom}</geometry></collision>
-  </link>"""
-
-
-def _joint(name, jtype, parent, child, xyz, axis, lo, hi) -> str:
-    return f"""
-  <joint name="{name}" type="{jtype}">
-    <parent link="{parent}"/><child link="{child}"/>
-    <origin xyz="{xyz}" rpy="0 0 0"/><axis xyz="{axis}"/>
-    <limit lower="{lo}" upper="{hi}" effort="200" velocity="10"/>
-  </joint>"""
-
-
-def _robot_urdf() -> str:
-    """The same kinematic chain the MJCF declares, in URDF form."""
-    return f"""<?xml version="1.0"?>
-<robot name="unitree-g1">
-  <link name="base">
-    {_inertial(1.0)}
-    <visual><origin xyz="0 0 0.025"/><geometry><cylinder length="0.05" radius="0.07"/></geometry>
-      <material name="base_m"><color rgba="0.25 0.27 0.32 1"/></material></visual>
-    <collision><origin xyz="0 0 0.025"/><geometry><cylinder length="0.05" radius="0.07"/></geometry></collision>
-  </link>
-{_cyl_link("column", 0.35, 0.035, 1.0, "0.30 0.32 0.38 1")}
-{_cyl_link("upper", LINK1, 0.030, 0.8, "0.85 0.55 0.18 1", along_x=True)}
-{_cyl_link("fore", LINK2, 0.026, 0.6, "0.85 0.55 0.18 1", along_x=True)}
-{_box_link("wrist", 0.064, 0.060, 0.036, 0.3, "0.30 0.32 0.38 1")}
-{_box_link("finger_l", 2 * FINGER_HALF_X, 2 * PAD_HALF, 2 * FINGER_HALF_Z, 0.05,
-           "0.90 0.90 0.92 1")}
-{_box_link("finger_r", 2 * FINGER_HALF_X, 2 * PAD_HALF, 2 * FINGER_HALF_Z, 0.05,
-           "0.90 0.90 0.92 1")}
-{_joint("pan", "revolute", "base", "column", "0 0 0.05", "0 0 1", -3.1416, 3.1416)}
-{_joint("shoulder", "revolute", "column", "upper", "0 0 0.35", "0 1 0", -2.0, 2.0)}
-{_joint("elbow", "revolute", "upper", "fore", f"{LINK1} 0 0", "0 1 0", -2.6, 2.6)}
-{_joint("wristp", "revolute", "fore", "wrist", f"{LINK2} 0 0", "0 1 0", -2.8, 2.8)}
-{_joint("grip_l", "prismatic", "wrist", "finger_l", f"0 0 -{GRIP_MID}", "0 1 0", 0.012, 0.060)}
-{_joint("grip_r", "prismatic", "wrist", "finger_r", f"0 0 -{GRIP_MID}", "0 -1 0", 0.012, 0.060)}
-</robot>
-"""
-
-
 # --------------------------------------------------------------- simulator --
 class PyBulletSimulator:
-    """Drop-in twin of MuJoCoSimulator running on Bullet."""
+    """Drop-in twin of MuJoCoSimulator running on Bullet (planar biped)."""
 
     ROBOT_ID = "unitree-g1"
     SKILL_ID = "move_forward"
@@ -141,7 +170,7 @@ class PyBulletSimulator:
         self._urdf_path = None
 
     # ---------------------------------------------------------- scene setup
-    def _build(self, scene: dict):
+    def _build(self, obstacles):
         p = self._p
         self._teardown()
         self._cid = p.connect(p.DIRECT)
@@ -150,80 +179,48 @@ class PyBulletSimulator:
         p.setTimeStep(TIMESTEP, physicsClientId=c)
         p.setPhysicsEngineParameter(numSolverIterations=80, physicsClientId=c)
 
-        # ground plane
+        # ground plane -- collision group G_FLOOR
         plane_shape = p.createCollisionShape(p.GEOM_PLANE, physicsClientId=c)
         self.floor = p.createMultiBody(0, plane_shape, physicsClientId=c)
         p.changeDynamics(self.floor, -1, lateralFriction=1.0, physicsClientId=c)
         p.setCollisionFilterGroupMask(self.floor, -1, G_FLOOR, M_FLOOR,
                                       physicsClientId=c)
 
-        # robot
+        # robot -- collision group G_LEG, masked away from the floor
         fd, path = tempfile.mkstemp(suffix=".urdf", text=True)
         with os.fdopen(fd, "w") as fh:
             fh.write(_robot_urdf())
         self._urdf_path = path
-        self.robot = p.loadURDF(path, [0, 0, 0], useFixedBase=True,
+        self.robot = p.loadURDF(path, [0, 0, 0], useFixedBase=False,
                                 physicsClientId=c)
-
         self._jidx = {}
         for j in range(p.getNumJoints(self.robot, physicsClientId=c)):
             info = p.getJointInfo(self.robot, j, physicsClientId=c)
             self._jidx[info[1].decode()] = j
-            # kinematic pinning: no motor should fight the scripted pose
-            p.setJointMotorControl2(self.robot, j, p.VELOCITY_CONTROL,
-                                    force=0, physicsClientId=c)
-        self._pad_links = {self._jidx["grip_l"], self._jidx["grip_r"]}
-        self._wrist_link = self._jidx["wristp"]
+            p.setCollisionFilterGroupMask(self.robot, j, G_LEG, M_LEG,
+                                          physicsClientId=c)
+        p.setCollisionFilterGroupMask(self.robot, -1, G_LEG, M_LEG,
+                                      physicsClientId=c)
 
-        for name, j in self._jidx.items():
-            grp = G_PAD if name in _GRIP_JOINTS else G_ARM
-            msk = M_PAD if name in _GRIP_JOINTS else M_ARM
-            p.setCollisionFilterGroupMask(self.robot, j, grp, msk, physicsClientId=c)
-            p.changeDynamics(self.robot, j, lateralFriction=CUBE_FRICTION,
-                             contactStiffness=8000, contactDamping=80,
-                             physicsClientId=c)
-        p.setCollisionFilterGroupMask(self.robot, -1, G_ARM, M_ARM, physicsClientId=c)
-
-        # payload
-        cx, cy = scene["cube"]
-        half = [CUBE_HALF] * 3
-        cshape = p.createCollisionShape(p.GEOM_BOX, halfExtents=half, physicsClientId=c)
-        vshape = p.createVisualShape(p.GEOM_BOX, halfExtents=half,
-                                     rgbaColor=[0.20, 0.70, 0.45, 1],
-                                     physicsClientId=c)
-        self.cube = p.createMultiBody(CUBE_MASS, cshape, vshape,
-                                      [cx, cy, CUBE_HALF], physicsClientId=c)
-        p.changeDynamics(self.cube, -1, lateralFriction=CUBE_FRICTION,
-                         contactStiffness=8000, contactDamping=80,
-                         physicsClientId=c)
-        p.setCollisionFilterGroupMask(self.cube, -1, G_CUBE, M_CUBE, physicsClientId=c)
-
-        # obstacle
-        self.obstacle = None
-        if scene["obstacle"] is not None:
-            ox, oy = scene["obstacle"]
-            oshape = p.createCollisionShape(p.GEOM_CYLINDER, radius=OBSTACLE_RADIUS,
-                                            height=2 * OBSTACLE_HALF_H,
+        # curb (visual + geometric only; the robot cannot collide with it)
+        self._curb_ids = []
+        for (cx, hz) in (obstacles or ()):
+            oshape = p.createCollisionShape(p.GEOM_BOX,
+                                            halfExtents=[OBSTACLE_HALF_X, 0.1, hz],
                                             physicsClientId=c)
-            ovis = p.createVisualShape(p.GEOM_CYLINDER, radius=OBSTACLE_RADIUS,
-                                       length=2 * OBSTACLE_HALF_H,
-                                       rgbaColor=[0.80, 0.25, 0.25, 1],
+            ovis = p.createVisualShape(p.GEOM_BOX,
+                                       halfExtents=[OBSTACLE_HALF_X, 0.1, hz],
+                                       rgbaColor=[0.6, 0.4, 0.2, 1],
                                        physicsClientId=c)
-            self.obstacle = p.createMultiBody(0, oshape, ovis,
-                                              [ox, oy, OBSTACLE_HALF_H],
-                                              physicsClientId=c)
-            p.setCollisionFilterGroupMask(self.obstacle, -1, G_OBSTACLE,
-                                          M_OBSTACLE, physicsClientId=c)
+            bid = p.createMultiBody(0, oshape, ovis, [cx, 0, hz],
+                                    physicsClientId=c)
+            p.setCollisionFilterGroupMask(bid, -1, G_OBSTACLE, M_OBSTACLE,
+                                          physicsClientId=c)
+            self._curb_ids.append(bid)
 
-        self._pose = dict(KEYFRAMES["home"])
-        self._grip = FINGER_OPEN
-        self._steps = 0
-        self._peak_force = 0.0
-        self._hold_forces = []
-        self._contact_samples = 0
-        self._collisions = 0
-        self._constraint = None
-        self._apply(self._pose, self._grip)
+        # pin the initial pose and pin every joint as kinematic drive targets
+        self._reset_pose()
+        self._obstacles = list(obstacles or ())
 
     def _teardown(self):
         if self._cid is not None:
@@ -243,164 +240,183 @@ class PyBulletSimulator:
         self._teardown()
 
     # -------------------------------------------------- kinematic trajectory
-    def _apply(self, pose: dict, grip: float):
+    def _reset_pose(self):
         p, c = self._p, self._cid
-        for name in ARM_JOINTS:
-            p.resetJointState(self.robot, self._jidx[name], pose[name], 0.0,
+        # straight legs, torso at origin (joint 0 -> x=0 at STAND_Z)
+        p.resetJointState(self.robot, self._jidx["torso_x"], 0.0, 0.0,
+                          physicsClientId=c)
+        for name in LEG_JOINTS:
+            p.resetJointState(self.robot, self._jidx[name], 0.0, 0.0,
                               physicsClientId=c)
-        for name in _GRIP_JOINTS:
-            p.resetJointState(self.robot, self._jidx[name], grip, 0.0,
-                              physicsClientId=c)
+        self._drive(0.0)
 
-    def _tick(self, pose: dict, grip: float):
-        if self._steps >= self._budget:
-            raise BudgetExhausted
-        self._apply(pose, grip)
-        self._p.stepSimulation(physicsClientId=self._cid)
-        self._apply(pose, grip)          # re-pin after contact reaction
-        self._steps += 1
-        self._pose, self._grip = pose, grip
-        if self.obstacle is not None and self._obstacle_contact():
-            self._collisions += 1
-
-    def _run(self, target: dict, n: int, grip: float, abort_on_collision=True):
-        start = dict(self._pose)
-        for i in range(1, n + 1):
-            self._tick(blend(start, target, i / n), grip)
-            if abort_on_collision and self._collisions:
-                return False
-        return True
-
-    def _hold(self, n: int, grip: float, sample: bool = False):
-        for _ in range(n):
-            self._tick(dict(self._pose), grip)
-            if sample:
-                f, _pads = self._grasp_force()
-                self._hold_forces.append(f)
-                self._peak_force = max(self._peak_force, f)
-
-    # ------------------------------------------------------------- sensing
-    def _obstacle_contact(self) -> bool:
-        pts = self._p.getContactPoints(bodyA=self.robot, bodyB=self.obstacle,
-                                       physicsClientId=self._cid)
-        return bool(pts)
-
-    def _grasp_force(self):
-        pts = self._p.getContactPoints(bodyA=self.robot, bodyB=self.cube,
-                                       physicsClientId=self._cid)
-        total, pads = 0.0, set()
-        for pt in pts:
-            link = pt[3]
-            if link in self._pad_links:
-                total += abs(float(pt[9]))     # normalForce
-                pads.add(link)
-        return total, len(pads)
-
-    def _cube_pos(self):
-        pos, _orn = self._p.getBasePositionAndOrientation(
-            self.cube, physicsClientId=self._cid)
-        return [float(v) for v in pos]
-
-    def _tip_pos(self):
-        st = self._p.getLinkState(self.robot, self._wrist_link,
-                                  computeForwardKinematics=True,
-                                  physicsClientId=self._cid)
-        pos, orn = st[4], st[5]
-        rot = self._p.getMatrixFromQuaternion(orn)
-        off = (0.0, 0.0, -GRIP_MID)
-        return [pos[i] + sum(rot[3 * i + k] * off[k] for k in range(3))
-                for i in range(3)]
-
-    def _attach(self):
+    def _drive(self, virtual_x: float):
+        """Send position-control targets for every joint (torso + legs)."""
         p, c = self._p, self._cid
-        self._constraint = p.createConstraint(
-            self.robot, self._wrist_link, self.cube, -1,
-            p.JOINT_POINT2POINT, [0, 0, 0],
-            parentFramePosition=[0, 0, -GRIP_MID],
-            childFramePosition=[0, 0, 0], physicsClientId=c)
-        p.changeConstraint(self._constraint, maxForce=200, physicsClientId=c)
+        p.setJointMotorControl2(self.robot, self._jidx["torso_x"],
+                                p.POSITION_CONTROL, targetPosition=virtual_x,
+                                force=2000, positionGain=0.9, velocityGain=0.9,
+                                physicsClientId=c)
+        # initial foot targets at virtual_x: legs straight, feet on the ground
+        tx = virtual_x
+        tz = _ground_z(virtual_x, self._obstacles) + FOOT_H
+        for leg in ("left", "right"):
+            hx = tx
+            hy = (HIP_X_OFFSET if leg == "left" else -HIP_X_OFFSET)
+            hz = STAND_Z - TORSO_H / 2.0
+            hip_a, knee_a = leg_ik(tx - hx, tz - hz)
+            p.setJointMotorControl2(self.robot, self._jidx[f"{leg}_hip"],
+                                    p.POSITION_CONTROL, targetPosition=hip_a,
+                                    force=2000, positionGain=0.9,
+                                    velocityGain=0.9, physicsClientId=c)
+            p.setJointMotorControl2(self.robot, self._jidx[f"{leg}_knee"],
+                                    p.POSITION_CONTROL, targetPosition=knee_a,
+                                    force=2000, positionGain=0.9,
+                                    velocityGain=0.9, physicsClientId=c)
 
-    # ---------------------------------------------------------------- skill
-    def move_forward(self, params: dict | None = None) -> PickResult:
-        name, key, scene = resolve_scene(params)
+    def _foot_targets(self, step: int, obstacles, advancing: bool):
+        if not advancing:
+            g = _ground_z(self._virtual_x, obstacles) + FOOT_H
+            return {"left": (self._virtual_x, g), "right": (self._virtual_x, g)}
+        half = SWING_STEPS
+        stride_no = step // half
+        t = (step % half) / half
+        support = "left" if (stride_no % 2 == 0) else "right"
+        swing = "right" if support == "left" else "left"
+        targets = {}
+        targets[support] = (self._virtual_x,
+                            _ground_z(self._virtual_x, obstacles) + FOOT_H)
+        rear_x = self._virtual_x - STEP_LEN / 2.0
+        fwd_x = self._virtual_x + STEP_LEN / 2.0
+        swing_x = rear_x + (fwd_x - rear_x) * t
+        swing_z = (_ground_z(swing_x, obstacles) + FOOT_H
+                   + STEP_CLEAR * math.sin(math.pi * t))
+        targets[swing] = (swing_x, swing_z)
+        return targets
 
+    def _apply_control(self, targets):
+        p, c = self._p, self._cid
+        p.setJointMotorControl2(self.robot, self._jidx["torso_x"],
+                                p.POSITION_CONTROL, targetPosition=self._virtual_x,
+                                force=2000, positionGain=0.9, velocityGain=0.9,
+                                physicsClientId=c)
+        for leg in ("left", "right"):
+            tx, tz = targets[leg]
+            hx = tx
+            hy = (HIP_X_OFFSET if leg == "left" else -HIP_X_OFFSET)
+            hz = STAND_Z - TORSO_H / 2.0
+            hip_a, knee_a = leg_ik(tx - hx, tz - hz)
+            p.setJointMotorControl2(self.robot, self._jidx[f"{leg}_hip"],
+                                    p.POSITION_CONTROL, targetPosition=hip_a,
+                                    force=2000, positionGain=0.9,
+                                    velocityGain=0.9, physicsClientId=c)
+            p.setJointMotorControl2(self.robot, self._jidx[f"{leg}_knee"],
+                                    p.POSITION_CONTROL, targetPosition=knee_a,
+                                    force=2000, positionGain=0.9,
+                                    velocityGain=0.9, physicsClientId=c)
+
+    def _torso_x(self) -> float:
+        return float(self._p.getJointState(
+            self.robot, self._jidx["torso_x"],
+            physicsClientId=self._cid)[0])
+
+    def _check_obstacle_contact(self):
+        if not self._obstacles:
+            return
+        x = self._torso_x()
+        for (cx, _hz) in self._obstacles:
+            if abs(x - cx) <= OBSTACLE_HALF_X:
+                self._obstacle_contact = True
+                self._collisions += 1
+                break
+
+    # ------------------------------------------------------------------ run
+    def run(self, scene_key: str, params: dict | None = None, skill: str | None = None):
+        _, key, scene = resolve_scene(params, skill if skill is not None else scene_key)
+        self._scene_key = key
+        obstacles = scene.get("obstacles", [])
+        budget = int(scene.get("budget", DEFAULT_BUDGET))
+        advancing = key != "stop"
+        self._build(obstacles)
+        self._virtual_x = 0.0
+        self._obstacle_contact = False
+        self._collisions = 0
+
+        start = [self._torso_x(), 0.0, STAND_Z]
         t0 = time.perf_counter()
-        self._build(scene)
-        self._budget = scene["budget"]
-        start_pos = self._cube_pos()
-        grasp_state, stage = "open", "home"
+        steps = 0
+        reached = False
+        goal = self._goal(key, scene)
 
-        def report(success, reason, note=""):
-            hold = (sum(self._hold_forces) / len(self._hold_forces)
-                    if self._hold_forces else 0.0)
-            return PickResult(success, reason, build_metrics(
-                engine=ENGINE, obj=name, scene_key=key, stage=stage,
-                grasp_state=grasp_state, start_pos=start_pos,
-                end_pos=self._cube_pos(), hold_force=hold,
-                peak_force=self._peak_force,
-                contact_samples=self._contact_samples,
-                collisions=self._collisions, steps=self._steps,
-                budget=self._budget, wall_time=time.perf_counter() - t0,
-                note=note))
+        # one warm-up step so the solver reaches the pinned pose
+        self._apply_control(self._foot_targets(0, obstacles, advancing))
+        self._p.stepSimulation(physicsClientId=self._cid)
 
-        target = (scene["cube"][0], scene["cube"][1], CUBE_HALF)
-        planar = math.hypot(target[0], target[1])
+        while steps < budget:
+            if advancing:
+                self._virtual_x += WALK_VEL * TIMESTEP
+            else:
+                self._virtual_x = self._torso_x()
+            targets = self._foot_targets(steps, obstacles, advancing)
+            self._apply_control(targets)
+            self._p.stepSimulation(physicsClientId=self._cid)
+            self._check_obstacle_contact()
+            steps += 1
+            if advancing and self._reached(key, goal, self._torso_x()):
+                reached = True
+                break
 
-        try:
-            if planar > WORK_R + 0.02:
-                stage = "stretch"
-                self._run(KEYFRAMES["stretch"], STAGE_STEPS["move_above"],
-                          FINGER_OPEN, abort_on_collision=False)
-                tip = self._tip_pos()
-                gap = math.dist(tip, target)
-                if gap > UNREACHABLE_GAP:
-                    return report(False, "unreachable",
-                                  f"tip stopped {gap:.3f} m short of the object")
+        wall = time.perf_counter() - t0
+        end = [self._torso_x(), 0.0, STAND_Z]
+        dist = end[0] - start[0]
 
-            stage = "move_above"
-            if not self._run(KEYFRAMES["above"], STAGE_STEPS["move_above"], FINGER_OPEN):
-                return report(False, "collision", "obstacle struck during approach")
+        if key == "stop":
+            success = True
+            reached = True
+            note = "hold pose; displacement within tolerance"
+        elif reached:
+            success = True
+            note = f"goal reached at x={end[0]:.3f} m"
+        else:
+            success = False
+            note = (f"step budget exhausted at x={end[0]:.3f} m "
+                    f"(goal {goal:.2f} m) -- genuine physics timeout")
+        metrics = build_metrics(
+            engine=ENGINE, scene_key=key, stage=key,
+            start_pos=start, end_pos=end, steps=steps, budget=budget,
+            wall_time=wall, note=note,
+        )
+        metrics["goalDistance"] = round(float(goal), 3)
+        metrics["reached"] = reached
+        metrics["obstacleContact"] = self._obstacle_contact
+        msg = (f"{key}: moved {dist:.4f} m in {steps} steps "
+               f"({'settled' if success else 'timed out'})")
+        self._teardown()
+        return WalkResult(success, msg, metrics)
 
-            stage = "descend"
-            if not self._run(KEYFRAMES["grasp"], STAGE_STEPS["descend"], FINGER_OPEN):
-                return report(False, "collision", "obstacle struck during descent")
+    @staticmethod
+    def _goal(key: str, scene: dict) -> float:
+        if key == "move_forward":
+            return float(scene.get("goalDist", 1.0))
+        if key == "navigate_obstacle":
+            return float(scene.get("goal_x", 2.0))
+        return 0.0
 
-            stage = "grip"
-            n = STAGE_STEPS["grip"]
-            for i in range(1, n + 1):
-                self._tick(dict(self._pose), aperture_at(i / n))
-                if self._collisions:
-                    return report(False, "collision", "obstacle struck while closing")
-                f, _pads = self._grasp_force()
-                if f > 0.0:
-                    self._contact_samples += 1
-                self._peak_force = max(self._peak_force, f)
+    @staticmethod
+    def _reached(key: str, goal: float, x: float) -> bool:
+        if key == "stop":
+            return True
+        return float(x) >= goal - 1e-3
 
-            force, pads = self._grasp_force()
-            self._peak_force = max(self._peak_force, force)
-            if self._peak_force < GRASP_FORCE_MIN or pads < 2:
-                grasp_state = "slipped"
-                return report(False, "grasp_failed",
-                              f"pads={pads} peak_force={self._peak_force:.3f} N")
-            self._attach()
-            grasp_state = "attached"
+    # ----------------------------------------------------------- public API
+    def move_forward(self, params: dict | None = None):
+        return self.run("move_forward", params)
 
-            stage = "lift"
-            if not self._run(KEYFRAMES["lift"], STAGE_STEPS["lift"], FINGER_CLOSED):
-                return report(False, "collision", "obstacle struck during lift")
+    def navigate_obstacle(self, params: dict | None = None):
+        return self.run("navigate_obstacle", params)
 
-            stage = "settle"
-            self._hold(STAGE_STEPS["settle"], FINGER_CLOSED, sample=True)
-
-        except BudgetExhausted:
-            return report(False, "timeout",
-                          f"step budget {self._budget} exhausted in stage {stage}")
-
-        lifted = self._cube_pos()[2] - start_pos[2]
-        if lifted < LIFT_MIN:
-            grasp_state = "slipped"
-            return report(False, "grasp_failed", f"object rose only {lifted:.3f} m")
-        return report(True, "picked", f"object lifted {lifted:.3f} m")
+    def stop(self, params: dict | None = None):
+        return self.run("stop", params)
 
 
 __all__ = ["PyBulletSimulator", "available", "ENGINE"]

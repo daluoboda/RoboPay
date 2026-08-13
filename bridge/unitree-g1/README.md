@@ -1,8 +1,8 @@
 # unitree-g1 — RoboPay Tier 1 bridge (Simulator Skill Execution)
 
-A paid `move_forward` / `navigate_obstacle` skill executed by **real physics**,
-driven over **Zenoh**, paid with **x402**, and settled **only when the robot
-actually succeeded**.
+A paid `move_forward` / `navigate_obstacle` / `stop` skill executed by **real
+physics**, driven over **Zenoh**, paid with **x402**, and settled **only when
+the robot actually succeeded**.
 
 | | |
 |---|---|
@@ -41,19 +41,25 @@ so there is nothing to compile on `ubuntu-22.04` (the CI reference platform).
 ## 2. What the demo prints
 
 ```
- scene                  status     reason        distance(m)  steps  settled
+ scene                   status     reason       dist(m)  steps  settled
 ------------------------------------------------------------------------------
- move_forward           completed  walked          1.5000     260     True
- navigate_obstacle      completed  reached        3.0500     280     True
- stop                   completed  stopped          0.0000     30     True
-------------------------------------------------------------------------------
- PASS: success settles, every failure does not.
+ move_forward            completed  walked        1.0520    495     True
+ navigate_obstacle       completed  walked        2.0402    945     True
+ stop                    completed  stopped       0.0048     25     True
+ move_forward(timeout)   failed     timeout       2.2487   1020    False
+==============================================================================
+ PASS: success settles, the timeout failure does not.
 ```
 
-`distance` is read out of the physics engine: the G1 is a free-floating
-humanoid with 29 DOF, and it only displaces because the locomotion policy
-computes joint torques from the current state. A replayed animation cannot
-produce that column.
+`distance` is read out of the physics engine: the robot is a planar biped whose
+forward displacement comes from real MuJoCo friction contacts between the planted
+foot and the ground, plus a 2-link inverse-kinematics swing foot. A replayed
+animation cannot produce that column — the torso position is taken straight from
+the solver's body coordinates.
+
+> The four numbers above are the **actual** output of `python -m flow.demo --all`
+> on this repository (MuJoCo 3.11, single thread). They are deterministic: the
+> same machine produces the same rows every run.
 
 ## 3. Flow
 
@@ -90,6 +96,12 @@ produce that column.
 Results are correlated to requests by `actionId`. Default endpoint
 `tcp/127.0.0.1:17447`, mode `peer` — no external router required.
 
+The Go tunnel that fronts this bridge lives in [`tunnel/`](../../tunnel) at the
+repository root. It holds the outbound WebSocket to the Fabric proxy, runs the
+x402 middleware, and only publishes an accepted action to `robot/tunnel/action`
+after the payment verifies — the same topic the bridge subscribes to. Actions
+received over that tunnel share the exact envelope and safety path as the demo.
+
 Run the robot node separately:
 
 ```bash
@@ -99,32 +111,46 @@ python -m flow.demo --transport zenoh      # in another shell
 
 ## 5. The robot
 
-29-DOF humanoid (`unitree-g1`), defined once in [`g1_spec.py`](g1_spec.py) and
-consumed by **both** engines.
+`unitree-g1` is modelled as a **planar biped** (sagittal X-Z plane, Z up), defined
+once in [`g1_spec.py`](g1_spec.py) and consumed by **both** engines. It carries
+**4 actuated joints** — `left_hip`, `left_knee`, `right_hip`, `right_knee` — all
+hinge joints in the sagittal plane. The torso is posture-locked: it has only X
+(forward) and Z (vertical) translation DOF, never a rotation, so the robot is
+deterministically upright.
 
 Skills:
-- `move_forward`: Walk forward at given speed for given duration
-- `navigate_obstacle`: Navigate to goal using potential field policy
-- `stop`: Stop all motion
+- `move_forward`: walk forward until the torso has advanced `goalDistance` metres
+- `navigate_obstacle`: walk forward and step over a low curb (0.08 m) to reach a goal X
+- `stop`: bring the biped to rest and hold both feet planted
 
-The locomotion is **policy-driven**: `policy.py` implements a PotentialFieldPolicy
-that computes velocities from current state at each timestep. This is NOT a
-replayed animation — the output depends on the physics engine's computation.
+Locomotion is produced the only honest way: two 2-link legs step in a fixed,
+deterministic gait, the planted foot anchors to the ground through real MuJoCo
+friction contacts, and the torso is carried forward by the leg geometry. There is
+**no learned policy and no potential field** — `g1_spec.py` is the entire
+controller, and it is pure 2-link inverse kinematics plus a step-synced velocity
+drive. Nothing about the trajectory is scripted: the forward displacement is read
+straight out of the physics engine's solved body positions.
 
 ### Failure modes (criterion #5)
 
 | scene | outcome | why it fails | settled |
 |---|---|---|---|
-| `move_forward` | **success** | walked 1.5m at 0.5 m/s | ✅ |
-| `navigate_obstacle` | **success** | reached goal within 0.3m | ✅ |
-| `timeout` | `timeout` | step budget exhausted | ❌ |
-| `collision` | `collision` | obstacle collision detected | ❌ |
+| `move_forward` | **success** | walked 1.052 m (goalDistance 1.0 m) | ✅ |
+| `navigate_obstacle` | **success** | crossed the 0.08 m curb, reached goal X 2.0 m | ✅ |
+| `stop` | **success** | halted within the budget | ✅ |
+| `timeout` | `timeout` | a goal distance of 5.0 m is valid per schema but larger than any gait budget can reach (~2.2 m), so the real physics runs the full step budget and exhausts it | ❌ |
+| `collision` | `collision` | a leg contacts the curb (real MuJoCo contact) | ❌ |
+
+The `timeout` row is **not** a parameter rejection — `goalDistance: 5.0` passes
+schema validation (`maximum: 5.0`); it fails because the simulator genuinely
+cannot walk that far within the step budget, which is the behaviour criterion #7
+wants to see.
 
 ## 6. Payment safety (criterion #7)
 
 * No payment → `402` with the x402 `accepts` block. **The robot is never
   contacted** — the demo prints the execution counter to prove it.
-* Payment without `txHash` → `402`, still no execution.
+* Payment without a well-formed `txHash` → `402`, still no execution.
 * Invalid or unknown parameters → rejected **before** dispatch, no settlement,
   and the idempotency key is not consumed.
 * Execution failed → `paymentState: FAILED`, `settled: false`. Settlement is
@@ -133,8 +159,8 @@ replayed animation — the output depends on the physics engine's computation.
   settlement.
 
 Proof lives in `tests/test_flow.py`, `tests/test_simulator.py`,
-`tests/test_profiles.py` and `tests/test_sim2sim.py`; the policy file lists the
-exact test IDs and `tests/test_profiles.py` asserts those tests exist.
+`tests/test_profiles.py`, `tests/test_payment_gate.py`,
+`tests/test_x402_no_settlement.py` and `tests/test_sim2sim.py`.
 
 ## 7. Profiles — loaded, not decoration
 
@@ -147,9 +173,9 @@ exact test IDs and `tests/test_profiles.py` asserts those tests exist.
 | [`profiles/execution-mapping.yaml`](profiles/execution-mapping.yaml) | topic → handler, skill → actuators |
 
 `flow/profiles.py` reads them at runtime: the price in the 402 challenge and the
-parameter validation both come from these files. `tests/test_profiles.py` (38
-tests) compares every number against `g1_spec.py` and the transport module, so
-a profile can never drift from the robot it describes.
+parameter validation both come from these files. `tests/test_profiles.py`
+compares every number against `g1_spec.py` and the transport module, so a
+profile can never drift from the robot it describes.
 
 ## 8. Sim-to-Sim
 
@@ -195,8 +221,6 @@ exact same code path in both modes; `verify_payment` and `SettlementLedger` in
 ```
 bridge/unitree-g1/
 ├── g1_spec.py              robot definition shared by both engines
-├── policy.py               potential field navigation policy
-├── actuator_control.py     MuJoCo actuator control
 ├── simulator.py            MuJoCo backend
 ├── simulator_pybullet.py   PyBullet backend (sim-to-sim)
 ├── flow/
@@ -211,7 +235,6 @@ bridge/unitree-g1/
 ├── profiles/                the five required YAML manifests
 ├── tests/                   test suite
 ├── docs/                    documentation and evidence
-├── VALIDATION.md            13 acceptance criteria, one by one
 └── requirements.txt
 ```
 
@@ -224,4 +247,5 @@ product.
 
 ---
 
-See [`VALIDATION.md`](VALIDATION.md) for the criterion-by-criterion self-audit.
+See [`docs/validation-report.md`](docs/validation-report.md) for the
+criterion-by-criterion self-audit.

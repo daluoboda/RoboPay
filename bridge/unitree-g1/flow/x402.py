@@ -1,4 +1,4 @@
-"""x402 payment verification for unitree-g1-arm-001 (D7 payment boundary).
+"""x402 payment verification for unitree-g1 (Tier 1 planar biped, D7 boundary).
 
 What the reviewer asked for (PR #70, CHANGES_REQUESTED):
     "demonstrate verification and settlement through the RoboPay Tunnel
@@ -104,7 +104,7 @@ class X402Verifier:
         self.seen = set()           # (payer, txHash) -> no replay
 
     def verify(self, payment: dict, challenge: Optional[X402Challenge] = None) -> dict:
-        challenge = challenge or X402Challenge("pick_object")
+        challenge = challenge or X402Challenge("move_forward")
         if not payment:
             raise X402Error("no payment attached")
 

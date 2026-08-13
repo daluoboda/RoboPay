@@ -22,7 +22,7 @@ class PaymentError(Exception):
 
 
 def verify_payment(payment: dict | None) -> dict:
-    """Verify a payment receipt against the pick_object x402 challenge.
+    """Verify a payment receipt against the unitree-g1 paid-action x402 challenge.
 
     D1 used a mock ("any txHash passes"). D7 replaced it with a protocol-level
     x402 verifier (flow/x402.py): the receipt must match the 402 challenge

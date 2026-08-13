@@ -7,37 +7,37 @@ transport:
 
 mappings:
   move_forward:
-    output: mujoco_actuator
+    output: gait
+    gait: planar-stepping
     actuators:
-      vx: "$params.speed"
-      vy: 0
-      wz: 0
-    durationSec: "$params.durationSec"
+      torso_x: "$params.goalDistance"
+      left_hip: ik
+      left_knee: ik
+      right_hip: ik
+      right_knee: ik
     metrics:
       - type: position_change
-        description: Robot displaced from start position
+        description: Torso displacement from start position
       - type: collision_status
-        description: No collisions during movement
+        description: Curb contact status during traversal
 
   navigate_obstacle:
-    output: mujoco_actuator
-    planner: potential_field
+    output: gait
+    gait: planar-stepping
     actuators:
-      vx: "$planner.vx"
-      vy: "$planner.vy"
-      wz: "$planner.wz"
+      torso_x: "$params.goal_x"
+      left_hip: ik
+      left_knee: ik
+      right_hip: ik
+      right_knee: ik
     metrics:
       - type: path_completion
-        description: Reached goal within 0.3m tolerance
+        description: Reached goal within tolerance
       - type: collision_status
-        description: No collisions during navigation
-      - type: path_length
-        description: Total path length in meters
+        description: Curb contact status during navigation
 
   stop:
-    output: mujoco_actuator
+    output: hold
     actuators:
-      vx: 0
-      vy: 0
-      wz: 0
+      torso_x: 0
     metrics: []

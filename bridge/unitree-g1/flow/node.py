@@ -1,4 +1,4 @@
-"""Robot-side entrypoint for unitree-g1-arm-001.
+"""Robot-side entrypoint for unitree-g1.
 
 Runs the Zenoh robot node: subscribes to robot/tunnel/action, executes the
 skill via the MuJoCo executor, publishes robot/tunnel/result.
@@ -20,7 +20,7 @@ def main():
             "Run the robot node on Linux (ubuntu-22.04) where zenoh wheels exist."
         )
     node = ZenohRobotNode(MuJoCoExecutor())
-    print("unitree-g1-arm-001 robot node (MuJoCo) listening on robot/tunnel/action ...")
+    print("unitree-g1 robot node (MuJoCo) listening on robot/tunnel/action ...")
     try:
         node.serve()
     except KeyboardInterrupt:

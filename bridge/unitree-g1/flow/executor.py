@@ -1,4 +1,4 @@
-"""Skill execution interface + executors.
+"""Skill execution interface + executors (planar biped, Tier 1).
 
 SkillExecutor is the seam the relay depends on. D1 used MockExecutor (no robot).
 D3 plugs in real physics. D4 makes the physics engine itself swappable, which
@@ -7,7 +7,14 @@ never learns which simulator (or, later, which real robot) is underneath.
 
 Backends are imported lazily so a missing optional engine can never break the
 payment path.
+
+The three planar-biped locomotion skills -- move_forward / navigate_obstacle /
+stop -- all run on the same simulator; SimExecutor just dispatches by skill id
+and returns the engine-agnostic SkillResult the relay expects.
 """
+from __future__ import annotations
+
+from g1_spec import SCENES
 
 
 class SkillResult:
@@ -30,7 +37,11 @@ class SkillExecutor:
 
 
 class MockExecutor(SkillExecutor):
-    """D1 stand-in. No physics. Counts executions so tests prove no double-run."""
+    """D1 stand-in. No physics. Counts executions so tests prove no double-run.
+
+    Faithful to the paid flow: a supported skill is reported as completed, an
+    unsupported one is rejected (never settles, never double-runs).
+    """
 
     def __init__(self, fail_skill: str | None = None):
         self.fail_skill = fail_skill
@@ -38,9 +49,11 @@ class MockExecutor(SkillExecutor):
 
     def execute(self, skill_id: str, params: dict) -> SkillResult:
         self.execution_count += 1
-        if skill_id == self.fail_skill or (params or {}).get("object") == "unreachable":
-            return SkillResult(False, "unreachable")
-        return SkillResult(True, "cube moved")
+        if skill_id not in SCENES:
+            return SkillResult(False, f"unsupported_skill:{skill_id}")
+        if skill_id == self.fail_skill:
+            return SkillResult(False, f"failed:{skill_id}")
+        return SkillResult(True, f"{skill_id}: moved (mock)")
 
 
 BACKENDS = ("mujoco", "pybullet")
@@ -59,18 +72,23 @@ def make_simulator(engine: str = "mujoco"):
 
 
 class SimExecutor(SkillExecutor):
-    """Real Tier 1 executor: physics-backed `pick_object` on unitree-g1-arm-001."""
+    """Real Tier 1 executor: physics-backed locomotion on unitree-g1."""
 
     def __init__(self, engine: str = "mujoco"):
         self.engine = engine
         self.sim = make_simulator(engine)
-        self.supported = {"pick_object"}
+        self.supported = set(SCENES)
 
     def execute(self, skill_id: str, params: dict) -> SkillResult:
         if skill_id not in self.supported:
             return SkillResult(False, f"unsupported_skill:{skill_id}")
-        res = self.sim.pick_object(params or {})
-        return SkillResult(res.success, res.reason, res.metrics)
+        method = getattr(self.sim, skill_id, None)
+        if method is None:
+            return SkillResult(False, f"unsupported_skill:{skill_id}")
+        # The simulator resolves the scene from (params, skill_id) and returns
+        # a WalkResult; we surface it as the engine-agnostic SkillResult.
+        res = method(params or {})
+        return SkillResult(res.success, res.message, res.metrics)
 
 
 class MuJoCoExecutor(SimExecutor):
