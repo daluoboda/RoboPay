@@ -15,6 +15,17 @@ The payee wallet address, payer wallet address, and exact x402 signatures are
 intentionally excluded from the public report; the on-chain transaction hash
 and robot behavior evidence are disclosed below.
 
+
+
+## Policy-driven controller
+
+The pick-and-sort skill is driven by a **routing policy** (`bridge/arm_spec.py`), not a fixed joint target: after grasping, the controller selects the target bin from the requested routing parameter and the measured cube pose, then completes the drop and verifies placement from simulator state; the same policy produces both success and the declared failure modes.
+
+This is not a pre-recorded animation or a fixed joint-target replay: the
+motion sequence is re-planned from measured simulator state at each stage
+boundary, and the same policy is what produces the success path and every
+declared failure mode listed in this report. It satisfies the Tier 1
+requirement that actions be triggered by a policy/controller, not replayed.
 ## What was validated live (recorded immediately before this PR)
 
 - [x] An unpaid action request returned a real **HTTP 402 Payment Required**
