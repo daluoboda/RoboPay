@@ -35,11 +35,7 @@ from x402_harness import (
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = PACKAGE_ROOT.parents[2]
-SKILL_CATALOG = (
-    ROOT
-    / "registry/vendors/laok/fetch-arm-001"
-    / "skill-catalog.json"
-)
+SKILL_CATALOG = ROOT / "registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1" / "skill-catalog.json"
 ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
 ROBOT_ID = "fetch_arm_001_nosettle"
