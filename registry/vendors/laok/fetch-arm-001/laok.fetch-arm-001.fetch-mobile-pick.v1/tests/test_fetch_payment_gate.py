@@ -47,7 +47,7 @@ from x402_harness import (
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[6]
 SKILL_CATALOG = ROOT / "registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1" / "skill-catalog.json"
-BRIDGE_PYTHONPATH = str(ROOT / "registry/vendors/laok/fetch-001/laok.fetch-001.fetch-mobile-pick.v1/bridge")
+BRIDGE_PYTHONPATH = str(ROOT / "registry/vendors/laok/fetch-arm-001/laok.fetch-arm-001.fetch-mobile-pick.v1/bridge")
 ROBOT_ID = "fetch_arm_001_payment_gate"
 ZENOH_TEST_PORT = int(os.environ.get("FETCH_PAYMENT_GATE_ZENOH_PORT", "7447"))
 PRICE = "0.10"
