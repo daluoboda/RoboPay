@@ -8,8 +8,8 @@ never learns which simulator (or, later, which real robot) is underneath.
 Backends are imported lazily so a missing optional engine can never break the
 payment path.
 
-The three planar-biped locomotion skills -- move_forward / navigate_obstacle /
-stop -- all run on the same simulator; SimExecutor just dispatches by skill id
+The two planar-biped skills -- pick_and_carry / stop -- both run on the same
+simulator; SimExecutor just dispatches by skill id (the live set is ``SCENES``)
 and returns the engine-agnostic SkillResult the relay expects.
 """
 from __future__ import annotations

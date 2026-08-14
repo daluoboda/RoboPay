@@ -1,4 +1,4 @@
-# unitree-g1 skills
+# unitree-g1 pick-and-carry skills
 schemaVersion: robot-skills.v1
 
 profileId: laok.unitree-g1-arm-001.pick-and-carry.v1
@@ -42,8 +42,9 @@ skills:
     failureModes:
       - reason: timeout
         description: >
-          Step budget exhausted before the drop zone was reached. Real
-          physics outcome, never a scripted success.
+          Step budget exhausted before the drop zone was reached. This is a
+          real physics outcome, never a scripted success.
+
   - skillId: move_forward
     displayName: Walk forward
     description: >

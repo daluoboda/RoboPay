@@ -1,4 +1,4 @@
-# unitree-g1 execution mapping
+# unitree-g1 pick-and-carry execution mapping
 schemaVersion: execution-mapping.v1
 
 transport:
@@ -6,6 +6,20 @@ transport:
   topic: robot/tunnel/action
 
 mappings:
+  pick_and_carry:
+    output: gait
+    gait: planar-stepping
+    actuators:
+      torso_x: "$params.dropDistance"
+      left_hip: ik
+      left_knee: ik
+      right_hip: ik
+      right_knee: ik
+    metrics:
+      - type: position_change
+        description: Torso displacement from start to drop zone
+      - type: carry_status
+        description: Object acquired at pickup zone and carried to drop zone
   move_forward:
     output: gait
     gait: planar-stepping
@@ -36,20 +50,6 @@ mappings:
       - type: collision_status
         description: Curb contact status during navigation
 
-  pick_and_carry:
-    output: gait
-    gait: planar-stepping
-    actuators:
-      torso_x: "$params.dropDistance"
-      left_hip: ik
-      left_knee: ik
-      right_hip: ik
-      right_knee: ik
-    metrics:
-      - type: position_change
-        description: Torso displacement from start to drop zone
-      - type: carry_status
-        description: Object acquired at pickup zone and carried to drop zone
   stop:
     output: hold
     actuators:

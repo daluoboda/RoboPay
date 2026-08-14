@@ -12,7 +12,7 @@ kind: RobotProfile
 
 profileId: laok.unitree-g1-arm-001.pick-and-carry.v1
 robotId: unitree-g1
-displayName: Unitree G1 (planar biped, MuJoCo/PyBullet simulated)
+displayName: Unitree G1 (planar biped, pick-and-carry, MuJoCo/PyBullet simulated)
 version: 1.0.0
 
 vendor:

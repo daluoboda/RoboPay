@@ -40,7 +40,7 @@ class TestUnpaidRejected402(unittest.TestCase):
     def test_unpaid_is_402_no_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-u1"})
         self.assertEqual(resp["status"], 402)
         self.assertEqual(ex.execution_count, 0)
@@ -53,7 +53,7 @@ class TestInvalidRejectedNoSettle(unittest.TestCase):
     def test_malformed_txhash_is_402_no_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-bad",
                          "payment": valid_receipt(tx_hash="0xzzz")})
         self.assertEqual(resp["status"], 402)
@@ -63,7 +63,7 @@ class TestInvalidRejectedNoSettle(unittest.TestCase):
     def test_wrong_amount_is_402_no_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-amt",
                          "payment": valid_receipt(amount="0.99")})
         self.assertEqual(resp["status"], 402)
@@ -72,7 +72,7 @@ class TestInvalidRejectedNoSettle(unittest.TestCase):
     def test_wrong_asset_is_402_no_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-asset",
                          "payment": valid_receipt(asset="0x" + "0" * 40)})
         self.assertEqual(resp["status"], 402)
@@ -83,7 +83,7 @@ class TestExpiredRejectedNoSettle(unittest.TestCase):
     def test_expired_is_402_no_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-exp",
                          "payment": valid_receipt(expiresAt=time.time() - 60)})
         self.assertEqual(resp["status"], 402)
@@ -96,10 +96,10 @@ class TestReplayRejected409(unittest.TestCase):
     def test_replay_rejected_no_double_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        first = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        first = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                           "idempotencyKey": "ns-r1", "payment": valid_receipt()})
         self.assertTrue(first["settled"])
-        replay = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        replay = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                            "idempotencyKey": "ns-r2",
                            "payment": valid_receipt(),   # same txHash
                            "params": {}})
@@ -112,20 +112,20 @@ class TestFailureNoSettle(unittest.TestCase):
     """An execution that fails (here: a genuinely timed-out walk) settles ZERO."""
 
     def _relay(self):
-        # MuJoCo backend is a hard dependency; a goalDistance the walker cannot
+        # MuJoCo backend is a hard dependency; a dropDistance the carrier cannot
         # reach within the budget is a real physics timeout (not a scripted one).
         try:
             from flow.executor import MuJoCoExecutor
             return Relay(MuJoCoExecutor())
         except Exception:                                 # pragma: no cover
-            return Relay(MockExecutor(fail_skill="move_forward"))
+            return Relay(MockExecutor(fail_skill="pick_and_carry"))
 
     def test_failed_execution_never_calls_settle(self):
         r = self._relay()
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-fail",
                          "payment": valid_receipt(),
-                         "params": {"goalDistance": 5.0}})
+                         "params": {"dropDistance": 8.0}})
         self.assertEqual(resp["status"], "failed")
         self.assertFalse(resp.get("settled", False),
                          "a failed execution must never settle")
@@ -136,7 +136,7 @@ class TestPaidSuccessSettle(unittest.TestCase):
 
     def test_verified_payment_executes_and_settles(self):
         r = Relay(MockExecutor())
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "ns-ok", "payment": valid_receipt()})
         self.assertEqual(resp["status"], "completed")
         self.assertTrue(resp["settled"])

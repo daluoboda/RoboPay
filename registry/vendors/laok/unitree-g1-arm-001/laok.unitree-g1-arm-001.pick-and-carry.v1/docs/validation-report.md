@@ -30,7 +30,7 @@ accepted action to `robot/tunnel/action` after successful verification.
 - Correlation via `actionId` (idempotency key).
 - Real Zenoh session on Linux/macOS; loopback transport used in headless CI and on Windows (no zenoh wheel).
 
-### Criterion #5: Failure Modes & Bounded Policy
+### Criterion #5: Failure Modes
 ✅ All failure paths tested (execution-gated, never settle on failure):
 - `timeout`: step budget exhausted before the drop zone was reached → no settlement
 - `invalid params`: rejected before dispatch → no settlement

@@ -45,14 +45,15 @@ TIMESTEP = 0.004         # physics timestep (s), shared by both engines
 WALK_VEL = 0.55          # nominal forward speed used by the demo table (m/s)
 
 # Per-stage control-step budgets used by the staged demo runner.
-STAGE_STEPS = {"init": 20, "move_forward": 200, "stop": 25}
+STAGE_STEPS = {"init": 20, "move_forward": 200, "navigate_obstacle": 1000,
+                "pick_and_carry": 1000, "stop": 25}
 DEFAULT_BUDGET = 1000    # hard cap on control steps for a single skill run
 
 # --------------------------------------------------------- skill params ---
 WALK_SPEED_MIN = 0.0
 WALK_SPEED_MAX = 1.5
 WALK_SPEED_DEFAULT = 0.6
-GOAL_DIST = 1.0          # default goal distance for move_forward (m)
+GOAL_DIST = 1.0          # default goal distance carried into scenes (m)
 GOAL_THRESHOLD = 0.3     # distance to target at which a goal counts as reached (m)
 
 # Obstacle (a low curb the walker must step over).
@@ -65,6 +66,9 @@ OBSTACLE_CLEAR_Z = 0.07  # foot must clear this height when crossing (m)
 # walker succeeds when it reaches the goal within the budget, else times out.
 SCENES = {
     "move_forward": {
+        # Advance forward by a goal distance using the deterministic stepping
+        # gait. Success when the torso reaches goalDist within the step budget;
+        # otherwise a genuine physics timeout (no fabricated success).
         "durationSec": 3.0,
         "speed": WALK_SPEED_DEFAULT,
         "obstacles": [],
@@ -72,9 +76,25 @@ SCENES = {
         "budget": DEFAULT_BUDGET,
     },
     "navigate_obstacle": {
+        # Walk forward and step over a low curb (0.04 m half-height) to reach a
+        # goal X. The swing foot lifts 0.12 m, well clear of the curb, so the
+        # traversal is genuine gait geometry, not a teleport.
         "goal_x": 2.0,
         "goal_y": 0.0,
         "obstacles": [(1.0, OBSTACLE_HALF_Z)],
+        "goalDist": GOAL_DIST,
+        "budget": DEFAULT_BUDGET,
+    },
+    "pick_and_carry": {
+        # Walk to a pickup zone, acquire a carried object (abstracted as
+        # co-located with the torso), then carry it to a drop zone. Success
+        # when the torso reaches the drop zone (goal_x) having passed the
+        # pickup zone (pickup_x). Genuine planar-biped physics; the carried
+        # object is modelled as kinematically attached to the torso during
+        # the carry phase (no separate arm DOF on this simplified walker).
+        "pickup_x": 1.0,
+        "goal_x": 2.0,
+        "obstacles": [],
         "goalDist": GOAL_DIST,
         "budget": DEFAULT_BUDGET,
     },
@@ -90,6 +110,8 @@ ALIASES = {
     "walk": "move_forward",
     "obstacle": "navigate_obstacle",
     "nav": "navigate_obstacle",
+    "carry": "pick_and_carry",
+    "pick": "pick_and_carry",
 }
 
 
@@ -98,15 +120,16 @@ def resolve_scene(params: dict | None = None, skill: str | None = None):
 
     ``skill`` (the resolved skill id from the request) takes priority over any
     ``skill``/``object`` key inside ``params``. Unknown names fall back to
-    ``move_forward``. Numeric overrides (durationSec / speed / goal_x / goal_y /
-    goalDistance) are applied on top of the base scene.
+    ``pick_and_carry``. Numeric overrides (durationSec / speed / goal_x /
+    goalDistance / dropDistance / pickupDistance) are applied on top of the
+    base scene.
     """
     params = params or {}
     name = str(skill if skill is not None
-               else params.get("skill", params.get("object", "move_forward")))
+               else params.get("skill", params.get("object", "pick_and_carry")))
     key = ALIASES.get(name, name)
     if key not in SCENES:
-        key = "move_forward"
+        key = "pick_and_carry"
     scene = dict(SCENES[key])
     if "durationSec" in params:
         scene["durationSec"] = float(params["durationSec"])
@@ -118,6 +141,10 @@ def resolve_scene(params: dict | None = None, skill: str | None = None):
         scene["goalDist"] = float(params["goalDist"])
     if "goal_x" in params:
         scene["goal_x"] = float(params["goal_x"])
+    if "dropDistance" in params:
+        scene["goal_x"] = float(params["dropDistance"])
+    if "pickupDistance" in params:
+        scene["pickup_x"] = float(params["pickupDistance"])
     if "goal_y" in params:
         scene["goal_y"] = float(params["goal_y"])
     return name, key, scene
@@ -197,7 +224,7 @@ def build_metrics(*, engine: str, scene_key: str, stage: str,
                   wall_time: float, note: str) -> dict:
     """Identical metric schema for every backend (reviewer-verifiable)."""
     delta = [round(float(end_pos[i] - start_pos[i]), 4) for i in range(3)]
-    skill_id = scene_key if scene_key in SCENES else "move_forward"
+    skill_id = scene_key if scene_key in SCENES else "pick_and_carry"
     distance = round(math.hypot(delta[0], delta[1]), 4)
     return {
         "robotId": "unitree-g1",
