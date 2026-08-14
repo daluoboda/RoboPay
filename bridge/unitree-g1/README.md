@@ -7,7 +7,7 @@ the robot actually succeeded**.
 | | |
 |---|---|
 | robotId | `unitree-g1` |
-| profileId | `unitree.unitree-g1.mujoco-sim.v1` |
+| profileId | `laok.unitree-g1-arm-001.loco.v1` |
 | skills | `move_forward`, `navigate_obstacle`, `stop` |
 | engines | MuJoCo (primary) + PyBullet (sim-to-sim) |
 | transport | Zenoh — `robot/tunnel/action` / `robot/tunnel/result` |

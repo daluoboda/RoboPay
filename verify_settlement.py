@@ -68,14 +68,28 @@ TIMEOUT = float(os.environ.get("X402_RPC_TIMEOUT", "12"))
 STRICT = os.environ.get("STRICT", "").lower() in ("1", "true", "yes")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-EVIDENCE = (
-    os.environ.get("X402_EVIDENCE")
-    or os.path.join(_HERE, "x402-evidence.json")
-)
-if not os.path.exists(EVIDENCE):
-    EVIDENCE = os.path.join(
-        os.environ.get("GITHUB_WORKSPACE", "."), "x402-evidence.json"
-    )
+_GITHUB_WORKSPACE = os.environ.get("GITHUB_WORKSPACE", ".")
+
+# Search order: explicit override -> repo-root neighbours -> the real location
+# under bridge/unitree-g1/docs/evidence. A reviewer who simply clones and runs
+# `python verify_settlement.py` must land on the committed evidence file.
+_CANDIDATES = [
+    os.environ.get("X402_EVIDENCE"),
+    os.path.join(_HERE, "x402-evidence.json"),
+    os.path.join(_HERE, "bridge", "unitree-g1", "docs", "evidence",
+                 "x402-evidence.json"),
+    os.path.join(_GITHUB_WORKSPACE, "x402-evidence.json"),
+    os.path.join(_GITHUB_WORKSPACE, "bridge", "unitree-g1", "docs", "evidence",
+                 "x402-evidence.json"),
+]
+EVIDENCE = None
+for _cand in _CANDIDATES:
+    if _cand and os.path.exists(_cand):
+        EVIDENCE = _cand
+        break
+if EVIDENCE is None:
+    # fall back to the most likely path so the error message is actionable
+    EVIDENCE = os.path.join(_HERE, "x402-evidence.json")
 
 
 class Unreachable(Exception):
