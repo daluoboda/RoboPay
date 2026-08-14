@@ -1,0 +1,19 @@
+{
+  "payer": "0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
+  "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "network": "base-sepolia",
+  "asset": "USDC",
+  "amount_usdc": 0.1,
+  "txs": [
+    "0xcf0222171e83fd6c0d3981cf202de984c1dd0cb10f06d81eef76da779a5fb6d2",
+    "0x444a3da9b5ed968b2b55f6d83987620304490383a46a85a8cf443b2f23947e82",
+    "0x1dc3dad5889628bdc388dab5bfe74efed3a7d2fa078596a09efef2f81a4505f7",
+    "0x7ee65bd9adb965d62433a5973a9bb5d7411e519ab2bdd23397050a82eb002387",
+    "0xa42302de6382bf2368126f62e7b5f2f95f2f71eb2091c1792379d8e0b3218d75",
+    "0x7304a7cd7f157efc08b8a9425354946cd6c1b104035303ec7440010cb700b7eb",
+    "0xdc0f5d83664b22bc11049a39f6fd2a7dd8d7553446bc1f621e0dd7b837339c79"
+  ],
+  "explorer_base": "https://sepolia.basescan.org/tx/",
+  "note": "7 real Base-Sepolia USDC settlements, each 0.1 USDC, all to canonical payee 0x742d35Cc...4438f44e (RoboPay). 6/7 were sent from payer 0xF2749b5f...; tx 0xcf0222171e83... was funded from an alternate deployment wallet 0x2404203a779d1ed676272a719b7e3554f8476b62 but settled to the same canonical payee. Independent on-chain verification: every tx has a USDC Transfer event topic[1]=payer, topic[2]=0x742d35Cc...4438f44e, value=100000 (0.1 USDC)."
+}
