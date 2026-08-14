@@ -1,9 +1,9 @@
-# Demo Video Script — `unitree-g1` planar biped / paid walking skill
+# Demo Video Script — `unitree-g1` planar biped / paid pick-and-carry skill
 
 **Goal:** a ~4-minute screen recording that proves the Tier 1 "Simulator Skill
 Execution" bounty end-to-end: a real physics simulator (MuJoCo) executes a paid
-skill, payment is enforced before execution, and **settlement only happens on
-success**.
+pick-and-carry skill, payment is enforced before execution, and **settlement only
+happens on success**.
 
 **Recording environment:** a clean terminal on Ubuntu 22.04 (same as CI).
 Font large enough to read. Show the command, hit enter, then read the output.
@@ -24,8 +24,8 @@ pip install -r requirements.txt
   unitree-g1  ·  skill: pick_and_carry  ·  engine: MuJoCo 3.11
   planar biped, 4 actuated joints, deterministic gait
   ```
-- **Voiceover:** "This is unitree-g1, a paid walking skill running inside a real
-  physics simulator. It answers the Tier 1 bounty: prove a simulator actually
+- **Voiceover:** "This is unitree-g1, a paid pick-and-carry skill running inside a
+  real physics simulator. It answers the Tier 1 bounty: prove a simulator actually
   executes a paid skill, and that you only get charged when it succeeds."
 
 ## 00:20–00:50 — Layout + profiles as runtime contract
@@ -44,13 +44,13 @@ pip install -r requirements.txt
   4. pay (mock envelope)
   5. `submit_paid_action` (six-field envelope)
   6. action published on `robot/tunnel/action`
-  7. simulator executes the deterministic gait
+  7. simulator executes the deterministic gait, acquires the object, carries it
   8. result on `robot/tunnel/result`
   9. `settled=True`
   10. replay with same idempotency key → **rejected** (no double execution)
 - **Voiceover:** "No payment, no execution. After payment, the simulator runs the
-  gait and advances the torso ~1.05 m, and only then is the payment settled.
-  Replaying the same idempotency key is rejected — no double charge."
+  gait, advances the torso ~2.0 m while carrying the object, and only then is the
+  payment settled. Replaying the same idempotency key is rejected — no double charge."
 
 ## 01:30–02:10 — The payment-safety matrix (`python -m flow.demo --all`)
 - **On screen:** run `python -m flow.demo --all`, show the summary table:

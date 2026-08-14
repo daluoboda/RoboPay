@@ -17,7 +17,7 @@ provider:
 
 challenge:
   resource: "robopay://unitree-g1-arm-001/{skill}"
-  description: "Pay-to-actuate unitree-g1 locomotion skill"
+  description: "Pay-to-actuate unitree-g1 pick-and-carry skill"
   maxTimeoutSeconds: 300
   headerIn: "X-PAYMENT"
 

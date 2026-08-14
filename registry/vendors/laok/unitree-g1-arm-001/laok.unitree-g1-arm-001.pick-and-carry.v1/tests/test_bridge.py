@@ -1,3 +1,22 @@
+"""Registry-package payment-gate tests for laok.unitree-g1-arm-001.pick-and-carry.v1.
+
+Same contract as bridge/unitree-g1/tests/test_payment_gate.py: every case
+drives the REAL x402 verifier and relay -- no mocks of the payment decision.
+This copy lives in the registry package so the package is self-verifiable;
+it imports the canonical flow/ implementation from the repo bridge.
+"""
+import os
+import sys
+
+# registry/.../v1/tests -> 5 levels up -> repo root -> bridge/unitree-g1
+_REG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # .../v1
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(_REG)))))                        # repo root
+_BRIDGE = os.path.join(_REPO, "bridge", "unitree-g1")
+for _p in (_BRIDGE, _REG):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 """Payment-gate boundary tests surfaced to the evidence generator.
 
 This file is the single source the evaluation harness scans for the payment

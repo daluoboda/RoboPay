@@ -23,8 +23,10 @@ reviewer should inspect for on-chain proof.
 
 Usage
     python -m flow.demo                          # single happy path (MuJoCo)
+    python -m flow.demo --skill pick_and_carry
+    python -m flow.demo --skill move_forward
     python -m flow.demo --skill navigate_obstacle
-    python -m flow.demo --all                    # all four scenes + summary
+    python -m flow.demo --all                    # all scenes + summary
     python -m flow.demo --engine pybullet        # second physics engine
     python -m flow.demo --transport zenoh        # real Zenoh (Linux/macOS)
 """
@@ -47,13 +49,17 @@ except Exception:                                            # pragma: no cover
 
 ROBOT_ID = "unitree-g1"
 
-# (skill_id, params) -- the four genuine outcomes of the paid flow:
-#   success / success-over-curb / success-hold / genuine-physics-timeout.
+# (skill_id, params) -- the genuine outcomes of the paid flow across every
+# skill: success (locomotion + pick-and-carry + safe hold) and genuine-physics
+# timeout (a goal the gait cannot reach inside the step budget).
 DEMO_SCENES = [
-    ("move_forward", {}),
-    ("navigate_obstacle", {}),
-    ("stop", {}),
-    ("move_forward", {"goalDistance": 5.0}),   # budget exhausts -> timeout
+    ("move_forward", {}),                        # success
+    ("navigate_obstacle", {}),                   # success (steps over the curb)
+    ("pick_and_carry", {}),                      # success
+    ("stop", {}),                                # success (safe hold)
+    ("move_forward", {"goalDistance": 8.0}),     # budget exhausts -> timeout
+    ("pick_and_carry", {"dropDistance": 8.0}),   # budget exhausts -> timeout
+    ("navigate_obstacle", {"goal_x": 8.0}),      # budget exhausts -> timeout
 ]
 
 
@@ -156,8 +162,9 @@ def run_once(relay: Relay, executor_probe, skill_id: str, params: dict,
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="unitree-g1 paid-flow demo")
-    ap.add_argument("--skill", default="move_forward",
-                    choices=[s for s, _ in DEMO_SCENES[:3]])
+    ap.add_argument("--skill", default="pick_and_carry",
+                    choices=["move_forward", "navigate_obstacle",
+                             "pick_and_carry", "stop"])
     ap.add_argument("--engine", default="mujoco", choices=["mujoco", "pybullet"])
     ap.add_argument("--transport", default="loopback", choices=["loopback", "zenoh"])
     ap.add_argument("--all", action="store_true", help="run every scene")
@@ -191,7 +198,7 @@ def main(argv=None) -> int:
             print(f" distance={m.get('distanceTraveled')} m  "
                   f"steps={m.get('stepsUsed')}/{m.get('stepBudget')}  "
                   f"reached={m.get('reached')}  "
-                  f"obstacleContact={m.get('obstacleContact')}")
+                  f"carried={m.get('carried')}")
             rows.append((skill_id, params, res.get("status"), res.get("settled"),
                          m.get("distanceTraveled", 0.0),
                          m.get("stepsUsed", 0), m.get("reached", False)))
@@ -206,9 +213,12 @@ def main(argv=None) -> int:
             print(f" {skill_id + p:<18}{status:<11}{str(settled):>8}"
                   f"{dist:>10.4f}{steps:>8}")
         print("=" * 78)
-        # success scenes settle; the timeout (goalDistance 5.0) must NOT settle
-        ok = (rows[0][3] is True and rows[1][3] is True and rows[2][3] is True
-              and rows[3][3] is False)
+        # success scenes (move_forward, navigate_obstacle, pick_and_carry,
+        # stop) settle; the three genuine timeouts must NOT settle.
+        success_idx = (0, 1, 2, 3)
+        timeout_idx = (4, 5, 6)
+        ok = (all(rows[i][3] is True for i in success_idx)
+              and all(rows[i][3] is False for i in timeout_idx))
         print(" PASS: every success settles, the genuine timeout does not."
               if ok else " FAIL: settlement policy violated!")
         return 0 if ok else 1

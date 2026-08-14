@@ -3,13 +3,13 @@
 Criterion #5 (bounded policy + interruptible execution + safe stop) proven
 with real physics, not mocks:
 
-  * timeout scene    -> the step budget is exhausted before the goal and the
-                        run STOPS (bounded policy), returns failure, never
+  * timeout scene    -> the step budget is exhausted before the drop zone and
+                        the run STOPS (bounded policy), returns failure, never
                         settles.
   * stop skill       -> the run holds a stable pose and terminates cleanly
                         inside the budget (interruptible execution).
-  * normal scenes    -> move_forward / navigate_obstacle complete inside the
-                        budget, proving the bound is not an arbitrary truncation.
+  * normal scene     -> pick_and_carry completes inside the budget, proving the
+                        bound is not an arbitrary truncation.
   * replay           -> the same idempotency key is rejected, so a paid action
                         is never re-actuated or re-settled.
 
@@ -37,7 +37,7 @@ class TestSafeStopReal:
         """A clipped step budget stops execution (bounded policy) and the
         run returns failure without settling."""
         sim = MuJoCoSimulator()
-        result = sim.move_forward({"goalDistance": 5.0})
+        result = sim.pick_and_carry({"dropDistance": 8.0})
         assert result.success is False, "timeout must fail"
         steps = result.metrics.get("stepsUsed", 0)
         budget = result.metrics.get("stepBudget", 0)
@@ -46,34 +46,36 @@ class TestSafeStopReal:
     def test_stop_completes_within_budget(self):
         sim = MuJoCoSimulator()
         result = sim.stop({})
-        assert result.success is True, result.reason
+        assert result.success is True, result.msg
         assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
 
     def test_normal_scene_completes_within_budget(self):
         """The nominal scene completes inside the step budget, proving the
         bounded policy is not an arbitrary truncation."""
         sim = MuJoCoSimulator()
-        result = sim.move_forward({})
-        assert result.success is True, result.reason
+        result = sim.pick_and_carry({})
+        assert result.success is True, result.msg
         assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
 
-    def test_obstacle_scene_completes_within_budget(self):
+    def test_custom_drop_distance_completes_within_budget(self):
+        """A non-default (custom) drop distance that is still within reach
+        completes inside the step budget."""
         sim = MuJoCoSimulator()
-        result = sim.navigate_obstacle({})
-        assert result.success is True, result.reason
+        result = sim.pick_and_carry({"dropDistance": 1.5})
+        assert result.success is True, result.msg
         assert result.metrics.get("stepsUsed", 0) <= result.metrics.get("stepBudget", 0)
 
     def test_timeout_never_settles(self):
         from flow.executor import MuJoCoExecutor
         from flow.relay import Relay
         r = Relay(MuJoCoExecutor())
-        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                          "idempotencyKey": "safestop-timeout",
                          "payment": {"txHash": "0x" + "a" * 64, "verified": True,
                                      "amount": "0.10", "network": "eip155:84532",
                                      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
                                      "payer": "0xpayer0000000000000000000000000000000001"},
-                         "params": {"goalDistance": 5.0}})
+                         "params": {"dropDistance": 8.0}})
         assert resp["status"] == "failed"
         assert resp["settled"] is False
 
@@ -83,14 +85,14 @@ class TestSafeStopReal:
         from flow.executor import MuJoCoExecutor
         from flow.relay import Relay
         r = Relay(MuJoCoExecutor())
-        first = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        first = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                           "idempotencyKey": "safestop-replay",
                           "payment": {"txHash": "0x" + "a" * 64, "verified": True,
                                       "amount": "0.10", "network": "eip155:84532",
                                       "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
                                       "payer": "0xpayer0000000000000000000000000000000001"}})
         assert first["settled"] is True
-        replay = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
+        replay = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
                            "idempotencyKey": "safestop-replay",
                            "payment": {"txHash": "0x" + "a" * 64, "verified": True,
                                        "amount": "0.10", "network": "eip155:84532",
