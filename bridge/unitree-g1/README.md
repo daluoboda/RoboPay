@@ -1,17 +1,14 @@
 # unitree-g1 — RoboPay Tier 1 bridge (Simulator Skill Execution)
 
-A paid `pick_and_carry` / `stop` skill executed by **real physics**, driven over
-**Zenoh**, paid with **x402**, and settled **only when the robot actually
-succeeded**. This is a **humanoid pick-and-carry** task (Tier 1, B1), built on
-the same G1 bridge that previously carried a plain-walk skill — deliberately
-kept on a distinct `pick-and-carry.v1` profile so it does **not** collide with
-the `#24` obstacle-avoidance track or the old `#90` walk track.
+A paid `move_forward` / `navigate_obstacle` / `stop` skill executed by **real
+physics**, driven over **Zenoh**, paid with **x402**, and settled **only when
+the robot actually succeeded**.
 
 | | |
 |---|---|
 | robotId | `unitree-g1` |
-| profileId | `laok.unitree-g1-arm-001.pick-and-carry.v1` |
-| skills | `pick_and_carry`, `stop` |
+| profileId | `laok.unitree-g1-arm-001.loco.v1` |
+| skills | `move_forward`, `navigate_obstacle`, `stop` |
 | engines | MuJoCo (primary) + PyBullet (sim-to-sim) |
 | transport | Zenoh — `robot/tunnel/action` / `robot/tunnel/result` |
 | scope | **simulation only** — CPU, headless, no GPU, no ROS, no hardware |
@@ -19,11 +16,6 @@ the `#24` obstacle-avoidance track or the old `#90` walk track.
 > **Scope statement (criterion #6).** This bridge never drives physical
 > hardware. There is no motor driver, no teleop channel and no hardware SDK in
 > the dependency list. Every action runs inside a physics engine in-process.
-
-> **Track separation.** `pick_and_carry` is the only locomotion/actuation skill
-> here. The `#24` `navigate_obstacle` (curb-crossing) and the `#90` plain
-> `move_forward` walk skills live on different profiles; this PR adds a new
-> pick-and-carry capability without touching them.
 
 ---
 
@@ -49,24 +41,23 @@ so there is nothing to compile on `ubuntu-22.04` (the CI reference platform).
 ## 2. What the demo prints
 
 ```
- skill             status      settled   dist(m)   steps
+ scene                   status     reason       dist(m)  steps  settled
 ------------------------------------------------------------------------------
- pick_and_carry    completed      True    2.0002     957
- stop              completed      True    0.0002      50
- pick_and_carry {'dropDistance': 8.0}failed        False    2.0884    1000
+ move_forward            completed  walked        1.0520    495     True
+ navigate_obstacle       completed  walked        2.0402    945     True
+ stop                    completed  stopped       0.0048     25     True
+ move_forward(timeout)   failed     timeout       2.2487   1020    False
 ==============================================================================
- PASS: every success settles, the genuine timeout does not.
+ PASS: success settles, the timeout failure does not.
 ```
 
-`dist` and `steps` are read out of the physics engine: the robot is a planar
-biped whose forward displacement comes from real MuJoCo friction contacts
-between the planted foot and the ground, plus a 2-link inverse-kinematics swing
-foot. A replayed animation cannot produce that column — the torso position is
-taken straight from the solver's body coordinates. The object is modelled as
-co-located with the torso (a box the biped carries), so `carried` flips to
-`True` once the pickup zone is passed and stays set through the carry.
+`distance` is read out of the physics engine: the robot is a planar biped whose
+forward displacement comes from real MuJoCo friction contacts between the planted
+foot and the ground, plus a 2-link inverse-kinematics swing foot. A replayed
+animation cannot produce that column — the torso position is taken straight from
+the solver's body coordinates.
 
-> The numbers above are the **actual** output of `python -m flow.demo --all`
+> The four numbers above are the **actual** output of `python -m flow.demo --all`
 > on this repository (MuJoCo 3.11, single thread). They are deterministic: the
 > same machine produces the same rows every run.
 
@@ -128,33 +119,32 @@ hinge joints in the sagittal plane. The torso is posture-locked: it has only X
 deterministically upright.
 
 Skills:
-- `pick_and_carry`: walk forward to a **pickup zone** (`pickupDistance`, default
-  1.0 m), acquire the carried object (modelled as co-located with the torso on
-  this planar biped), then **carry** it to a **drop zone** (`dropDistance`,
-  default 2.0 m). Success when the torso reaches the drop zone within the step
-  budget after passing the pickup zone.
-- `stop`: bring the biped to rest and hold both feet planted — the safe-stop
-  primitive.
+- `move_forward`: walk forward until the torso has advanced `goalDistance` metres
+- `navigate_obstacle`: walk forward and step over a low curb (0.08 m) to reach a goal X
+- `stop`: bring the biped to rest and hold both feet planted
 
 Locomotion is produced the only honest way: two 2-link legs step in a fixed,
 deterministic gait, the planted foot anchors to the ground through real MuJoCo
 friction contacts, and the torso is carried forward by the leg geometry. There is
 **no learned policy and no potential field** — `g1_spec.py` is the entire
 controller, and it is pure 2-link inverse kinematics plus a step-synced velocity
-drive. Nothing about the trajectory is scripted: the forward displacement and the
-carry state are read straight out of the physics engine's solved body positions.
+drive. Nothing about the trajectory is scripted: the forward displacement is read
+straight out of the physics engine's solved body positions.
 
 ### Failure modes (criterion #5)
 
 | scene | outcome | why it fails | settled |
 |---|---|---|---|
-| `pick_and_carry` | **success** | walked to pickup zone, acquired object, reached drop zone (2.0002 m) | ✅ |
+| `move_forward` | **success** | walked 1.052 m (goalDistance 1.0 m) | ✅ |
+| `navigate_obstacle` | **success** | crossed the 0.08 m curb, reached goal X 2.0 m | ✅ |
 | `stop` | **success** | halted within the budget | ✅ |
-| `pick_and_carry {'dropDistance': 8.0}` | `timeout` | a drop distance of 8.0 m is valid per schema (`maximum: 8.0`) but larger than any gait budget can reach (~2.2 m), so the real physics runs the full step budget and exhausts it | ❌ |
+| `timeout` | `timeout` | a goal distance of 5.0 m is valid per schema but larger than any gait budget can reach (~2.2 m), so the real physics runs the full step budget and exhausts it | ❌ |
+| `collision` | `collision` | a leg contacts the curb (real MuJoCo contact) | ❌ |
 
-The `timeout` row is **not** a parameter rejection — `dropDistance: 8.0` passes
-schema validation; it fails because the simulator genuinely cannot carry that
-far within the step budget, which is the behaviour criterion #7 wants to see.
+The `timeout` row is **not** a parameter rejection — `goalDistance: 5.0` passes
+schema validation (`maximum: 5.0`); it fails because the simulator genuinely
+cannot walk that far within the step budget, which is the behaviour criterion #7
+wants to see.
 
 ## 6. Payment safety (criterion #7)
 
@@ -199,8 +189,7 @@ pytest tests/test_sim2sim.py -q
   are generated from the same `g1_spec.py`; the tests assert identical joint
   chains, link offsets and actuator axes.
 * **dynamic agreement** — with PyBullet installed, both engines must return the
-  same verdict, the same failure reason, and an identical metric schema
-  (`reached`, `pickupReached`, `carried`, `objectX`, `pickupX`).
+  same verdict, the same failure reason, and an identical metric schema.
 
 On Windows those dynamic checks are skipped (no PyBullet wheel) and a contract
 stub exercises every PyBullet call path instead. CI on `ubuntu-22.04` runs them

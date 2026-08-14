@@ -1,15 +1,15 @@
 """D3 MuJoCo executor tests (headless, deterministic, CI-friendly).
 
-Proves the skill is REAL physics (torso travels a genuine distance, the carried
-object is acquired at the pickup zone and deposited at the drop zone, the budget
-can genuinely exhaust) and that the two required outcomes exist:
+Proves the skill is REAL physics (torso travels a genuine distance, the curb is
+traversed by geometry, the budget can genuinely exhaust) and that the two
+required outcomes exist:
 
-  success  -- the drop zone is reached within the step budget (having passed the
-              pickup zone)
-  timeout  -- the step budget runs out before the drop zone (a real physics
-              outcome, never a scripted success)
+  success  -- the goal is reached within the step budget
+  timeout  -- the step budget runs out before the goal (a real physics outcome,
+              never a scripted success)
 
-Also proves the payment layer settles only on success (NO settlement on timeout).
+Also proves the payment layer settles only on success (NO settlement on
+timeout).
 """
 import unittest
 
@@ -19,7 +19,7 @@ from flow.relay import Relay
 
 HAS_SIM = True  # MuJoCo is a hard dependency of this backend
 
-REQ = {"skill": "pick_and_carry", "robotId": "unitree-g1", "amount": "0.01"}
+REQ = {"skill": "move_forward", "robotId": "unitree-g1", "amount": "0.01"}
 PAID = {"txHash": "0x" + "a" * 64, "verified": True, "amount": "0.10",
         "network": "eip155:84532",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
@@ -28,15 +28,22 @@ PAID = {"txHash": "0x" + "a" * 64, "verified": True, "amount": "0.10",
 
 class TestMuJoCoWalk(unittest.TestCase):
 
-    def test_pick_and_carry_succeeds_and_carries(self):
-        r = MuJoCoSimulator().pick_and_carry({})
+    def test_move_forward_succeeds_and_travels(self):
+        r = MuJoCoSimulator().move_forward({})
         self.assertTrue(r.success, r.to_dict())
         m = r.metrics
         self.assertTrue(m["reached"])
-        self.assertTrue(m["carried"])
-        self.assertTrue(m["pickupReached"])
         self.assertGreater(m["distanceTraveled"], 0.9)
         self.assertLessEqual(m["stepsUsed"], m["stepBudget"])
+        self.assertFalse(m["obstacleContact"])
+
+    def test_navigate_obstacle_traverses_curb(self):
+        r = MuJoCoSimulator().navigate_obstacle({})
+        self.assertTrue(r.success, r.to_dict())
+        m = r.metrics
+        self.assertTrue(m["reached"])
+        self.assertGreater(m["distanceTraveled"], 1.8)
+        self.assertTrue(m["obstacleContact"])     # curb was actually encountered
 
     def test_stop_holds_pose(self):
         r = MuJoCoSimulator().stop({})
@@ -46,7 +53,7 @@ class TestMuJoCoWalk(unittest.TestCase):
         self.assertAlmostEqual(m["distanceTraveled"], 0.0, places=3)
 
     def test_failure_timeout_is_genuine(self):
-        r = MuJoCoSimulator().pick_and_carry({"dropDistance": 8.0})
+        r = MuJoCoSimulator().move_forward({"goalDistance": 5.0})
         self.assertFalse(r.success, r.to_dict())
         self.assertFalse(r.metrics["reached"])
         self.assertGreaterEqual(r.metrics["stepsUsed"], r.metrics["stepBudget"])
@@ -61,7 +68,7 @@ class TestMuJoCoWalk(unittest.TestCase):
         ex2 = MuJoCoExecutor()
         r2 = Relay(ex2)
         bad = r2.handle({**REQ, "idempotencyKey": "sim-bad", "payment": PAID,
-                         "params": {"dropDistance": 8.0}})
+                         "params": {"goalDistance": 5.0}})
         self.assertEqual(bad["status"], "failed")
         self.assertFalse(bad["settled"])     # NO settlement on failure
 

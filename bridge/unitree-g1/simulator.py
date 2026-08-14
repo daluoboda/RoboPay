@@ -52,7 +52,7 @@ def _ground_z(x: float, obstacles) -> float:
 
 def _build_xml(obstacles) -> str:
     """Assemble the MJCF model string. The curb geom is added only when the
-    scene actually has one, so the pick_and_carry model stays flat."""
+    scene actually has one, so the move_forward model stays flat."""
     curb = ""
     for (cx, hz) in (obstacles or ()):
         curb += (
@@ -126,7 +126,7 @@ class MuJoCoSimulator:
     """Physics-backed walker for unitree-g1."""
 
     ROBOT_ID = "unitree-g1"
-    SKILL_ID = "pick_and_carry"
+    SKILL_ID = "move_forward"
 
     def __init__(self):
         self._model = None
@@ -245,9 +245,7 @@ class MuJoCoSimulator:
         t0 = time.perf_counter()
         steps = 0
         reached = False
-        carried = False
         goal = self._goal(key, scene)
-        pickup_x = float(scene.get("pickup_x", 1.0)) if key == "pick_and_carry" else None
         while steps < budget:
             if advancing:
                 self._virtual_x += spec.WALK_VEL * spec.TIMESTEP
@@ -261,8 +259,6 @@ class MuJoCoSimulator:
             mujoco.mj_step(self._model, self._data)
             self._check_obstacle_contact()
             steps += 1
-            if pickup_x is not None and self._data.qpos[0] >= pickup_x:
-                carried = True
             if advancing and self._reached(key, goal, self._data.qpos[0]):
                 reached = True
                 break
@@ -274,12 +270,6 @@ class MuJoCoSimulator:
             success = True
             reached = True          # a held pose is trivially "reached"
             note = "hold pose; displacement within tolerance"
-        elif key == "pick_and_carry":
-            success = reached and carried
-            note = (f"picked at x>={pickup_x:.2f} m, carried to x={end[0]:.3f} m"
-                    if success else
-                    f"step budget exhausted at x={end[0]:.3f} m "
-                    f"(goal {goal:.2f} m, pickup_x {pickup_x:.2f}) -- genuine physics timeout")
         elif reached:
             success = True
             note = f"goal reached at x={end[0]:.3f} m"
@@ -292,26 +282,15 @@ class MuJoCoSimulator:
             start_pos=start, end_pos=end, steps=steps, budget=budget,
             wall_time=wall, note=note,
         )
-        if key == "stop":
-            metrics["reached"] = True
-        elif key == "pick_and_carry":
-            metrics["reached"] = reached
-            metrics["pickupX"] = round(float(pickup_x), 3) if pickup_x else None
-            metrics["pickupReached"] = bool(carried)
-            metrics["carried"] = bool(carried)
-            metrics["objectX"] = round(float(end[0]), 4) if carried else 0.0
-        else:
-            metrics["goalDistance"] = round(float(goal), 3)
-            metrics["reached"] = reached
-            metrics["obstacleContact"] = self._obstacle_contact
+        metrics["goalDistance"] = round(float(goal), 3)
+        metrics["reached"] = reached
+        metrics["obstacleContact"] = self._obstacle_contact
         msg = (f"{key}: moved {dist:.4f} m in {steps} steps "
                f"({'settled' if success else 'timed out'})")
         return spec.WalkResult(success, msg, metrics)
 
     @staticmethod
     def _goal(key: str, scene: dict) -> float:
-        if key == "pick_and_carry":
-            return float(scene.get("goal_x", 2.0))
         if key == "move_forward":
             return float(scene.get("goalDist", spec.GOAL_DIST))
         if key == "navigate_obstacle":
@@ -334,13 +313,10 @@ class MuJoCoSimulator:
     def stop(self, params: dict | None = None):
         return self.run("stop", params)
 
-    def pick_and_carry(self, params: dict | None = None):
-        return self.run("pick_and_carry", params)
-
 
 if __name__ == "__main__":            # pragma: no cover - manual debug
     sim = MuJoCoSimulator()
-    for name in ("move_forward", "navigate_obstacle", "pick_and_carry", "stop"):
+    for name in ("move_forward", "navigate_obstacle", "stop"):
         r = getattr(sim, name)()
         print(name, "->", r.message)
         print("   ", r.metrics)

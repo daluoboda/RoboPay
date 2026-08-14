@@ -15,7 +15,7 @@ PAID = {"txHash": "0x" + "a" * 64, "verified": True, "amount": "0.10",
         "network": "base-sepolia",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
         "payer": "0xpayer0000000000000000000000000000000001"}
-REQ = {"skill": "pick_and_carry", "robotId": "unitree-g1", "amount": "0.01"}
+REQ = {"skill": "move_forward", "robotId": "unitree-g1", "amount": "0.01"}
 
 
 class TestPaymentFlow(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestPaymentFlow(unittest.TestCase):
         self.assertEqual(len(r.ledger.settled), 1)     # not settled twice
 
     def test_failure_no_settle(self):
-        ex = MockExecutor(fail_skill="pick_and_carry")
+        ex = MockExecutor(fail_skill="move_forward")
         r = Relay(ex)
         resp = r.handle({**REQ, "idempotencyKey": "k4", "payment": PAID})
         self.assertEqual(resp["status"], "failed")

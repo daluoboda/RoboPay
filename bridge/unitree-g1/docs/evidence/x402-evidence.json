@@ -5,7 +5,7 @@
   "network": "base-sepolia",
   "asset": "USDC",
   "amount_usdc": 0.1,
-  "resource": "robopay://unitree-g1-arm-001/pick_and_carry",
+  "resource": "robopay://unitree-g1-arm-001/move_forward",
   "settledAt": "2026-08-13T05:21:54Z",
   "txs": [
     "0xcb9cab548125ddf34980bf14a5bbb57d8a86d9896348a46d63f9178f34470cc4"

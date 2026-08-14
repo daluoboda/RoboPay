@@ -24,7 +24,8 @@ traversal geometry and travelled distance are genuine physics. Nothing
 numerical is faked: the distances reported are read back from the solver.
 
 Public surface (identical to simulator.MuJoCoSimulator):
-    PyBulletSimulator().pick_and_carry(params)    -> WalkResult
+    PyBulletSimulator().move_forward(params)      -> WalkResult
+    PyBulletSimulator().navigate_obstacle(params) -> WalkResult
     PyBulletSimulator().stop(params)              -> WalkResult
 """
 from __future__ import annotations
@@ -38,7 +39,6 @@ from g1_spec import (
     LEG_JOINTS, HIP_MIN, HIP_MAX, KNEE_MIN, KNEE_MAX,
     STAND_Z, TORSO_H, HIP_X_OFFSET, THIGH_LEN, SHANK_LEN, FOOT_H, FOOT_HALF,
     STEP_LEN, STEP_CLEAR, SWING_STEPS, TIMESTEP, WALK_VEL, OBSTACLE_HALF_X,
-    GOAL_DIST,
     resolve_scene, leg_ik, build_metrics, WalkResult,
     DEFAULT_BUDGET,
 )
@@ -158,7 +158,7 @@ class PyBulletSimulator:
     """Drop-in twin of MuJoCoSimulator running on Bullet (planar biped)."""
 
     ROBOT_ID = "unitree-g1"
-    SKILL_ID = "pick_and_carry"
+    SKILL_ID = "move_forward"
     ENGINE = ENGINE
 
     def __init__(self):
@@ -348,9 +348,7 @@ class PyBulletSimulator:
         t0 = time.perf_counter()
         steps = 0
         reached = False
-        carried = False
         goal = self._goal(key, scene)
-        pickup_x = float(scene.get("pickup_x", 1.0)) if key == "pick_and_carry" else None
 
         # one warm-up step so the solver reaches the pinned pose
         self._apply_control(self._foot_targets(0, obstacles, advancing))
@@ -366,8 +364,6 @@ class PyBulletSimulator:
             self._p.stepSimulation(physicsClientId=self._cid)
             self._check_obstacle_contact()
             steps += 1
-            if pickup_x is not None and self._torso_x() >= pickup_x:
-                carried = True
             if advancing and self._reached(key, goal, self._torso_x()):
                 reached = True
                 break
@@ -380,12 +376,6 @@ class PyBulletSimulator:
             success = True
             reached = True
             note = "hold pose; displacement within tolerance"
-        elif key == "pick_and_carry":
-            success = reached and carried
-            note = (f"picked at x>={pickup_x:.2f} m, carried to x={end[0]:.3f} m"
-                    if success else
-                    f"step budget exhausted at x={end[0]:.3f} m "
-                    f"(goal {goal:.2f} m, pickup_x {pickup_x:.2f}) -- genuine physics timeout")
         elif reached:
             success = True
             note = f"goal reached at x={end[0]:.3f} m"
@@ -398,18 +388,9 @@ class PyBulletSimulator:
             start_pos=start, end_pos=end, steps=steps, budget=budget,
             wall_time=wall, note=note,
         )
-        if key == "stop":
-            metrics["reached"] = True
-        elif key == "pick_and_carry":
-            metrics["reached"] = reached
-            metrics["pickupX"] = round(float(pickup_x), 3) if pickup_x else None
-            metrics["pickupReached"] = bool(carried)
-            metrics["carried"] = bool(carried)
-            metrics["objectX"] = round(float(end[0]), 4) if carried else 0.0
-        else:
-            metrics["goalDistance"] = round(float(goal), 3)
-            metrics["reached"] = reached
-            metrics["obstacleContact"] = self._obstacle_contact
+        metrics["goalDistance"] = round(float(goal), 3)
+        metrics["reached"] = reached
+        metrics["obstacleContact"] = self._obstacle_contact
         msg = (f"{key}: moved {dist:.4f} m in {steps} steps "
                f"({'settled' if success else 'timed out'})")
         self._teardown()
@@ -417,10 +398,8 @@ class PyBulletSimulator:
 
     @staticmethod
     def _goal(key: str, scene: dict) -> float:
-        if key == "pick_and_carry":
-            return float(scene.get("goal_x", 2.0))
         if key == "move_forward":
-            return float(scene.get("goalDist", GOAL_DIST))
+            return float(scene.get("goalDist", 1.0))
         if key == "navigate_obstacle":
             return float(scene.get("goal_x", 2.0))
         return 0.0
@@ -440,9 +419,6 @@ class PyBulletSimulator:
 
     def stop(self, params: dict | None = None):
         return self.run("stop", params)
-
-    def pick_and_carry(self, params: dict | None = None):
-        return self.run("pick_and_carry", params)
 
 
 __all__ = ["PyBulletSimulator", "available", "ENGINE"]

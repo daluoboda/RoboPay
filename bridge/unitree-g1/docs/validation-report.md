@@ -3,7 +3,7 @@
 ## Summary
 - **Robot**: Unitree G1, modelled as a **planar biped** (sagittal X-Z plane) with **4 actuated joints** — `left_hip`, `left_knee`, `right_hip`, `right_knee` — plus a posture-locked torso (X/Z translation only, no rotation)
 - **Tier**: 1 (Simulator Skill Execution)
-- **Skills**: `pick_and_carry`, `stop` (Tier 1 B1 humanoid pick-and-carry)
+- **Skills**: `move_forward`, `navigate_obstacle`, `stop`
 - **Engine**: MuJoCo (primary) + PyBullet (sim-to-sim)
 - **Transport**: Zenoh (real tunnel) — `tunnel/` at the repo root hosts the Go tunnel binary; actions are gated on x402 verification before dispatch
 - **Payment**: x402 (EIP-3009 `transferWithAuthorization`) settled through the public x402 facilitator on Base Sepolia
@@ -30,13 +30,12 @@ accepted action to `robot/tunnel/action` after successful verification.
 - Correlation via `actionId` (idempotency key).
 - Real Zenoh session on Linux/macOS; loopback transport used in headless CI and on Windows (no zenoh wheel).
 
-### Criterion #5: Failure Modes & Bounded Policy
+### Criterion #5: Failure Modes
 ✅ All failure paths tested (execution-gated, never settle on failure):
-- `timeout`: step budget exhausted before the drop zone was reached → no settlement
+- `timeout`: step budget exhausted → no settlement
+- `collision`: leg/curb contact detected → no settlement
 - `invalid params`: rejected before dispatch → no settlement
 - `replay`: same idempotency key re-submitted → rejected, no re-execution, no re-settlement
-- `stop` (safe-stop): a bounded, interruptible primitive — the run always terminates
-  cleanly and never leaves the robot mid-gait
 
 ### Criterion #6: Scope Classification
 ✅ simulator-only
@@ -62,7 +61,7 @@ accepted action to `robot/tunnel/action` after successful verification.
 | amount | `0.1 USDC` |
 | asset | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (canonical Base Sepolia USDC) |
 | mechanism | EIP-3009 `transferWithAuthorization` (the on-chain `AuthorizationUsed` event is present) |
-| resource | `robopay://unitree-g1-arm-001/pick_and_carry` |
+| resource | `robopay://unitree-g1-arm-001/move_forward` |
 
 The transaction was verified live against Base Sepolia on 2026-08-13: status
 Success, block 45415117, the `Transfer` event moves exactly 0.1 USDC from the

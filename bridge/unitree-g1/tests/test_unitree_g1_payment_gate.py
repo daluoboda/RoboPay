@@ -1,7 +1,6 @@
 """Exercise unitree-g1's x402 payment gate through the real Go Tunnel binary.
 
-Covers every point of the RoboPay Tier 1 acceptance criteria for the
-pick-and-carry submission:
+Covers every point of PR #90's CHANGES_REQUESTED:
 
   * a reproducible unpaid 402 case          -> test_unpaid_malformed_rejected_fail_closed
   * a Tunnel-verified paid action           -> test_paid_action_publishes_and_settles
@@ -63,13 +62,13 @@ ROOT = PACKAGE_ROOT.parents[1]
 SKILL_CATALOG = (
     ROOT
     / "registry/vendors/laok/unitree-g1-arm-001"
-    / "laok.unitree-g1-arm-001.pick-and-carry.v1/skill-catalog.json"
+    / "laok.unitree-g1-arm-001.loco.v1/skill-catalog.json"
 )
 BRIDGE_PYTHONPATH = str(PACKAGE_ROOT)
 ROBOT_ID = "unitree_g1_payment_gate"
 ZENOH_TEST_PORT = int(os.environ.get("UNITREE_G1_PAYMENT_GATE_ZENOH_PORT", "7447"))
 PRICE = "0.10"
-ALLOWED_ACTIONS = "pick_and_carry,stop"
+ALLOWED_ACTIONS = "move_forward,navigate_obstacle,stop"
 ACTION_TOPIC = "robot/tunnel/action"
 RESULT_TOPIC = "robot/tunnel/result"
 EXECUTION_TIMEOUT_SECONDS = "8"
@@ -119,7 +118,7 @@ class SimulatorSide:
         if self.executor is None:
             from flow.executor import MuJoCoExecutor
             self.executor = MuJoCoExecutor()
-        res = self.executor.execute(skill_id or "pick_and_carry", params)
+        res = self.executor.execute(skill_id or "move_forward", params)
         if self.outcome == "failure":
             res = type(res)(False, "reviewer-forced-failure", res.metrics)
         result = {
@@ -244,7 +243,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
         return http_post(
             action_url,
             {
-                "action": "pick_and_carry",
+                "action": "move_forward",
                 "robot_id": ROBOT_ID,
                 "action_id": action_id,
                 "idempotency_key": action_id,
@@ -303,7 +302,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
                 discovered = json.loads(skills_body)
                 self.assertEqual(
                     {item["skill_id"] for item in discovered["skills"]},
-                    {"pick_and_carry", "stop"},
+                    {"move_forward", "navigate_obstacle", "stop"},
                 )
                 self.assertTrue(
                     all(item["price_usdc"] == PRICE for item in discovered["skills"])
@@ -311,7 +310,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
 
                 # 2) Reproducible unpaid 402.
                 unpaid_status, unpaid_headers, _ = http_post(
-                    action_url, {"action": "pick_and_carry", "robot_id": ROBOT_ID}
+                    action_url, {"action": "move_forward", "robot_id": ROBOT_ID}
                 )
                 self.assertEqual(unpaid_status, 402)
                 self.assertTrue(
@@ -322,7 +321,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
                 # 3) Malformed request (params not an object) also fails closed.
                 malformed_status, _, _ = http_post(
                     action_url,
-                    {"action": "pick_and_carry", "params": "not-an-object"},
+                    {"action": "move_forward", "params": "not-an-object"},
                 )
                 self.assertEqual(malformed_status, 402)
                 self.assertEqual(
@@ -385,7 +384,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
                 action_url = self._action_url(proxy)
 
                 unpaid_status, unpaid_headers, _ = http_post(
-                    action_url, {"action": "pick_and_carry", "robot_id": ROBOT_ID}
+                    action_url, {"action": "move_forward", "robot_id": ROBOT_ID}
                 )
                 self.assertEqual(unpaid_status, 402)
 
@@ -440,13 +439,13 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
                 action_url = self._action_url(proxy)
 
                 unpaid_status, unpaid_headers, _ = http_post(
-                    action_url, {"action": "pick_and_carry", "robot_id": ROBOT_ID}
+                    action_url, {"action": "move_forward", "robot_id": ROBOT_ID}
                 )
                 self.assertEqual(unpaid_status, 402)
 
                 failed_id = f"g1-fail-{uuid.uuid4().hex}"
                 paid_status, _, _ = self._paid_post(
-                    action_url, unpaid_headers, failed_id, {"dropDistance": 8.0}
+                    action_url, unpaid_headers, failed_id, {"goalDistance": 5.0}
                 )
                 self.assertEqual(paid_status, 202)
 
@@ -482,7 +481,7 @@ class UnitreeG1PaymentGateTests(unittest.TestCase):
                 action_url = self._action_url(proxy)
 
                 unpaid_status, unpaid_headers, _ = http_post(
-                    action_url, {"action": "pick_and_carry", "robot_id": ROBOT_ID}
+                    action_url, {"action": "move_forward", "robot_id": ROBOT_ID}
                 )
                 self.assertEqual(unpaid_status, 402)
 

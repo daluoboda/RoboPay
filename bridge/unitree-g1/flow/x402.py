@@ -104,7 +104,7 @@ class X402Verifier:
         self.seen = set()           # (payer, txHash) -> no replay
 
     def verify(self, payment: dict, challenge: Optional[X402Challenge] = None) -> dict:
-        challenge = challenge or X402Challenge("pick_and_carry")
+        challenge = challenge or X402Challenge("move_forward")
         if not payment:
             raise X402Error("no payment attached")
 

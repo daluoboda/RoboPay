@@ -10,7 +10,7 @@
 apiVersion: robopay.fabric/v1
 kind: RobotProfile
 
-profileId: laok.unitree-g1-arm-001.pick-and-carry.v1
+profileId: laok.unitree-g1-arm-001.loco.v1
 robotId: unitree-g1
 displayName: Unitree G1 (planar biped, MuJoCo/PyBullet simulated)
 version: 1.0.0
@@ -119,7 +119,7 @@ identity:
 
 # ------------------------------------------------------------- capabilities
 capabilities:
-  skills: [pick_and_carry, move_forward, navigate_obstacle, stop]
+  skills: [move_forward, navigate_obstacle, stop]
 manifests:
   skills: skills.yaml
   functions: functions.yaml

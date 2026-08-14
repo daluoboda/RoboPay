@@ -40,14 +40,14 @@ class TestChallengeMatchesPolicy(unittest.TestCase):
     """The 402 challenge is shaped exactly like the published payment policy."""
 
     def test_challenge_matches_payment_policy(self):
-        ch = X402Challenge("pick_and_carry")
+        ch = X402Challenge("move_forward")
         self.assertEqual(ch.amount, "0.10")
         self.assertEqual(ch.network, "eip155:84532")
         self.assertEqual(ch.asset, USDC_BASE_SEPOLIA)
         self.assertEqual(ch.settlement, "on-success-only")
 
     def test_accepts_block_is_reviewer_shaped(self):
-        ch = X402Challenge("pick_and_carry")
+        ch = X402Challenge("move_forward")
         block = ch.accepts_block("0xpayee")
         self.assertEqual(block["scheme"], "exact")
         self.assertEqual(block["amount"], "0.10")
@@ -61,7 +61,7 @@ class TestUnpaidRejected402(unittest.TestCase):
     def test_unpaid_is_402_no_execution(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-u1"})
         self.assertEqual(resp["status"], 402)
         self.assertEqual(ex.execution_count, 0)
@@ -90,7 +90,7 @@ class TestInvalidRejected(unittest.TestCase):
     def test_invalid_is_402_no_execution(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-bad",
                          "payment": valid_receipt(tx_hash="0xzzz")})
         self.assertEqual(resp["status"], 402)
@@ -112,7 +112,7 @@ class TestExpiredRejected(unittest.TestCase):
     def test_expired_is_402_no_execution(self):
         ex = MockExecutor()
         r = Relay(ex)
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-exp",
                          "payment": valid_receipt(expiresAt=time.time() - 60)})
         self.assertEqual(resp["status"], 402)
@@ -140,11 +140,11 @@ class TestReplayRejected409(unittest.TestCase):
     def test_replay_of_verified_payment_is_rejected_no_double_settle(self):
         ex = MockExecutor()
         r = Relay(ex)
-        first = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        first = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                           "idempotencyKey": "k-r1", "payment": valid_receipt(),
                           "params": {}})
         self.assertTrue(first["settled"])
-        replay = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        replay = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                            "idempotencyKey": "k-r2",
                            "payment": valid_receipt(),  # same txHash
                            "params": {}})
@@ -157,7 +157,7 @@ class TestPaidSuccessSettle(unittest.TestCase):
 
     def test_verified_payment_executes_and_settles(self):
         r = Relay(MockExecutor())
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-ok", "payment": valid_receipt(),
                          "params": {}})
         self.assertEqual(resp["status"], "completed")

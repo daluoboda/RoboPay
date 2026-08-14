@@ -21,7 +21,7 @@ PAID = {"txHash": "0x" + "a" * 64, "verified": True, "amount": "0.10",
         "network": "eip155:84532",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
         "payer": "0xpayer0000000000000000000000000000001"}
-REQ = {"skill": "pick_and_carry", "robotId": "unitree-g1"}
+REQ = {"skill": "move_forward", "robotId": "unitree-g1"}
 
 
 class TestManifestsExist(unittest.TestCase):
@@ -37,7 +37,7 @@ class TestManifestsExist(unittest.TestCase):
         rid = profiles.robot_id()
         pid = profiles.profile_id()
         self.assertEqual(rid, "unitree-g1")
-        self.assertEqual(pid, "laok.unitree-g1-arm-001.pick-and-carry.v1")
+        self.assertEqual(pid, "laok.unitree-g1-arm-001.loco.v1")
         # The two manifests that actually carry identity must agree.
         self.assertEqual(profiles.robot_profile()["profileId"], pid)
         self.assertEqual(profiles.skills_catalog()["profileId"], pid)
@@ -114,48 +114,46 @@ class TestSkillsCatalogMatchesCode(unittest.TestCase):
         SimExecutor.__init__(executor, "mujoco")
         self.assertEqual(executor.supported, set(profiles.skill_ids()))
         self.assertEqual(executor.supported,
-                         {"pick_and_carry", "move_forward",
-                          "navigate_obstacle", "stop"})
+                         {"move_forward", "navigate_obstacle", "stop"})
 
     def test_param_validation_rejects_unknown_keys(self):
         with self.assertRaises(profiles.ParamError):
-            profiles.validate_params("pick_and_carry", {"object": "cube"})
+            profiles.validate_params("move_forward", {"object": "cube"})
 
-    def test_param_validation_accepts_empty_and_drop_distance(self):
+    def test_param_validation_accepts_empty_and_goal_distance(self):
         # validate_params fills defaults for missing keys; assert specific values.
-        empty = profiles.validate_params("pick_and_carry", {})
-        self.assertEqual(empty["pickupDistance"], 1.0)
-        self.assertEqual(empty["dropDistance"], 2.0)
+        empty = profiles.validate_params("move_forward", {})
+        self.assertEqual(empty["goalDistance"], 1.0)
         self.assertEqual(empty["speed"], 0.6)
-        goal = profiles.validate_params("pick_and_carry", {"dropDistance": 5.0})
-        self.assertEqual(goal["dropDistance"], 5.0)
+        goal = profiles.validate_params("move_forward", {"goalDistance": 5.0})
+        self.assertEqual(goal["goalDistance"], 5.0)
         self.assertEqual(goal["speed"], 0.6)
 
-    def test_default_pickup_distance_matches_spec(self):
-        default = (profiles.skill("pick_and_carry")["paramsSchema"]
-                   ["properties"]["pickupDistance"]["default"])
+    def test_default_goal_distance_matches_spec(self):
+        default = (profiles.skill("move_forward")["paramsSchema"]
+                   ["properties"]["goalDistance"]["default"])
         self.assertAlmostEqual(default, spec.GOAL_DIST, places=6)
 
     def test_failure_modes_are_timeout_only(self):
-        declared = {f["reason"] for f in
-                    profiles.skill("pick_and_carry")["failureModes"]}
-        self.assertEqual(declared, {"timeout"})
+        for sid in ("move_forward", "navigate_obstacle"):
+            declared = {f["reason"] for f in profiles.skill(sid)["failureModes"]}
+            self.assertEqual(declared, {"timeout"}, sid)
         # stop has no failure modes (it always succeeds when paid)
         self.assertEqual(profiles.skill("stop")["failureModes"], [])
 
     def test_result_schema_matches_build_metrics(self):
         from simulator import MuJoCoSimulator
-        m = MuJoCoSimulator().pick_and_carry({}).metrics
+        m = MuJoCoSimulator().move_forward({}).metrics
         required = {
             "robotId", "skillId", "engine", "scene", "stage", "positionStart",
             "positionEnd", "positionDelta", "distanceTraveled", "stepsUsed",
-            "stepBudget", "simTime", "wallTime", "note", "reached",
-            "pickupX", "pickupReached", "carried", "objectX",
+            "stepBudget", "simTime", "wallTime", "note", "goalDistance",
+            "reached", "obstacleContact",
         }
         self.assertEqual(required, set(m))
 
     def test_price_is_declared_once_and_is_coherent(self):
-        p = profiles.skill("pick_and_carry")["pricing"]
+        p = profiles.skill("move_forward")["pricing"]
         self.assertEqual(p["settlement"], "on-success-only")
         decimals = profiles.payment_policy()["provider"]["asset"]["decimals"]
         atomic = int(p["amountAtomic"])
@@ -167,19 +165,19 @@ class TestExecutionMappingMatchesSpec(unittest.TestCase):
     def setUp(self):
         self.mapping = profiles.execution_mapping()
 
-    def test_two_skills_mapped(self):
+    def test_three_skills_mapped(self):
         self.assertEqual(set(self.mapping["mappings"]),
-                         {"pick_and_carry", "move_forward",
-                          "navigate_obstacle", "stop"})
+                         {"move_forward", "navigate_obstacle", "stop"})
 
     def test_gait_is_planar_stepping(self):
-        self.assertEqual(self.mapping["mappings"]["pick_and_carry"]["gait"],
-                         "planar-stepping")
+        for sid in ("move_forward", "navigate_obstacle"):
+            self.assertEqual(self.mapping["mappings"][sid]["gait"],
+                             "planar-stepping")
         # stop is a hold, not a gait
         self.assertEqual(self.mapping["mappings"]["stop"]["output"], "hold")
 
     def test_actuators_reference_leg_joints(self):
-        actuators = self.mapping["mappings"]["pick_and_carry"]["actuators"]
+        actuators = self.mapping["mappings"]["move_forward"]["actuators"]
         self.assertEqual(set(actuators),
                          {"torso_x", "left_hip", "left_knee",
                           "right_hip", "right_knee"})
@@ -261,7 +259,7 @@ class TestFunctionsManifest(unittest.TestCase):
         # The in-process envelope (flow.envelope.TaskEnvelope) carries the same
         # six fields the reviewer checks for.
         from flow.envelope import TaskEnvelope
-        d = TaskEnvelope("a", "unitree-g1", "pick_and_carry", {}, {}, "k").to_dict()
+        d = TaskEnvelope("a", "unitree-g1", "move_forward", {}, {}, "k").to_dict()
         self.assertEqual(set(d), {"actionId", "robotId", "skillId",
                                   "paramsHash", "payment", "idempotencyKey"})
 
@@ -274,7 +272,7 @@ class TestProfilesDriveTheRelay(unittest.TestCase):
         self.assertEqual(resp["status"], 402)
         accept = resp["accepts"][0]
         self.assertEqual(accept["amount"],
-                         profiles.skill("pick_and_carry")["pricing"]["amount"])
+                         profiles.skill("move_forward")["pricing"]["amount"])
         self.assertEqual(accept["network"], "eip155:84532")
         self.assertEqual(resp["header"], "X-PAYMENT")
 
@@ -299,7 +297,7 @@ class TestProfilesDriveTheRelay(unittest.TestCase):
         cat = profiles.list_skills("unitree-g1")
         self.assertEqual(cat["robotId"], "unitree-g1")
         entry = cat["skills"][0]
-        self.assertEqual(entry["skillId"], "pick_and_carry")
+        self.assertEqual(entry["skillId"], "move_forward")
         self.assertEqual(entry["settlement"], "on-success-only")
         self.assertEqual(set(entry["failureModes"]), {"timeout"})
 
@@ -308,7 +306,7 @@ class TestProfilesDriveTheRelay(unittest.TestCase):
         original = os.environ.get(key)
         os.environ[key] = "0x1111111111111111111111111111111111111111"
         try:
-            accepts = profiles.payment_requirements("pick_and_carry")
+            accepts = profiles.payment_requirements("move_forward")
             self.assertEqual(accepts[0]["payTo"],
                              "0x1111111111111111111111111111111111111111")
         finally:

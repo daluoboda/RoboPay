@@ -21,7 +21,7 @@ pip install -r requirements.txt
 - **On screen:** `README.md` header, then:
   ```
   RoboPay Tier 1 — Simulator Skill Execution
-  unitree-g1  ·  skill: pick_and_carry  ·  engine: MuJoCo 3.11
+  unitree-g1  ·  skill: move_forward  ·  engine: MuJoCo 3.11
   planar biped, 4 actuated joints, deterministic gait
   ```
 - **Voiceover:** "This is unitree-g1, a paid walking skill running inside a real
@@ -30,15 +30,15 @@ pip install -r requirements.txt
 
 ## 00:20–00:50 — Layout + profiles as runtime contract
 - **On screen:** `tree -L 2` (or `ls`), then `cat profiles/skills.yaml` (just the
-  `pick_and_carry` pricing + `settlement: on-success-only` block) and
+  `move_forward` pricing + `settlement: on-success-only` block) and
   `cat payment-policy.yaml` (the `safety:` block with every dangerous flag `false`).
 - **Voiceover:** "Five YAML profiles aren't documentation — they're the runtime
   contract. The 402 price and the parameter validation both come from these files,
   and a dedicated CI job fails if they ever drift from the code."
 
 ## 00:50–01:30 — Single paid run, step by step (`python -m flow.demo`)
-- **On screen:** run `python -m flow.demo --skill pick_and_carry`, let it print the 10 steps:
-  1. `list_skills` (free) → sees `pick_and_carry: 0.10 USDC`
+- **On screen:** run `python -m flow.demo --skill move_forward`, let it print the 10 steps:
+  1. `list_skills` (free) → sees `move_forward: 0.10 USDC`
   2. `request_action` with no payment → **402 Payment Required**
   3. "executions before payment: 0" (proves no free execution)
   4. pay (mock envelope)
@@ -57,20 +57,22 @@ pip install -r requirements.txt
   ```
    scene                   status     reason       dist(m)  steps  settled
   ------------------------------------------------------------------------------
-   pick_and_carry            completed  carried        2.0002    957     True
-   stop                    completed  stopped       0.0002     50     True
-   pick_and_carry(timeout)   failed     timeout       2.0884   1000    False
+   move_forward            completed  walked        1.0520    495     True
+   navigate_obstacle       completed  walked        2.0402    945     True
+   stop                    completed  stopped       0.0048     25     True
+   move_forward(timeout)   failed     timeout       2.2487   1020    False
   ==============================================================================
    PASS: success settles, the timeout failure does not.
   ```
-- **Voiceover:** "Here's the core invariant. pick_and_carry and stop both succeed
-  and settle. But the timeout row — a drop distance of 8.0 m that is valid per the
-  schema yet larger than any gait budget can reach — runs the real physics to
-  exhaustion, fails, and **does not settle**. You are never charged for a skill
-  that didn't succeed. That is criterion #7, proven by the simulator itself."
+- **Voiceover:** "Here's the core invariant. move_forward, navigate_obstacle and
+  stop all succeed and settle. But the timeout row — a goal distance of 5.0 m
+  that is valid per the schema yet larger than any gait budget can reach — runs
+  the real physics to exhaustion, fails, and **does not settle**. You are never
+  charged for a skill that didn't succeed. That is criterion #7, proven by the
+  simulator itself."
 
 ## 02:10–02:50 — Test suite green
-- **On screen:** `python -m pytest -q` → all pass. Then
+- **On screen:** `python -m pytest -q` → `122 passed, 7 skipped`. Then
   `python -m pytest tests/test_sim2sim.py -q` → sim-to-sim agreement.
 - **Voiceover:** "The same assertions run on CI across Python 3.10 and 3.11,
   including the PyBullet Sim-to-Sim and Zenoh transport tests. The profile-parity

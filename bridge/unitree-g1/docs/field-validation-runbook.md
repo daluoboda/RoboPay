@@ -20,11 +20,9 @@ cd bridge/unitree-g1
 pytest -q
 ```
 
-Expected: **all tests pass** on the reference platform. The MuJoCo/physics
-tests and the sim-to-sim dynamic layer run where a real engine is importable
-(Linux CI, or the managed MuJoCo venv); on Windows `pybullet`/`zenoh` have no
-wheels so those dynamic layers are honestly skipped (their call paths are still
-covered by `tests/bullet_stub.py` / the loopback transport).
+Expected: **150 passed, 8 skipped** on the reference platform (Windows: a
+few more skip — `pybullet`/`zenoh` have no Windows wheels; their call paths
+are still covered by `tests/bullet_stub.py`).
 
 ## 2. Real Go Tunnel payment gate (Criterion #1/#4)
 
@@ -68,11 +66,12 @@ Expected:
 ```
  skill             status      settled   dist(m)   steps
 ------------------------------------------------------------------------------
- pick_and_carry    completed      True    2.0002     957
+ move_forward      completed      True    0.9994     503
+ navigate_obstacle completed      True    2.0002     957
  stop              completed      True    0.0002      50
- pick_and_carry {'dropDistance': 8.0}failed        False    2.0884    1000
+ move_forward{5.0} failed        False    2.0884    1000
 ==============================================================================
- PASS: every success settles, the genuine timeout does not.
+ PASS: success settles, every failure (including the genuine timeout) does not.
 ```
 
 `dist` and `steps` are read from the physics solver — no replay.

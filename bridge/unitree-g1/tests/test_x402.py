@@ -37,14 +37,14 @@ def valid_receipt(tx_hash=TX_A, payer=PAYER, amount="0.10",
 class TestX402ChallengeFromProfiles(unittest.TestCase):
 
     def test_challenge_matches_payment_policy(self):
-        ch = X402Challenge("pick_and_carry")
+        ch = X402Challenge("move_forward")
         self.assertEqual(ch.amount, "0.10")
         self.assertEqual(ch.network, "eip155:84532")
         self.assertEqual(ch.asset, USDC_BASE_SEPOLIA)
         self.assertEqual(ch.settlement, "on-success-only")
 
     def test_accepts_block_is_reviewer_shaped(self):
-        ch = X402Challenge("pick_and_carry")
+        ch = X402Challenge("move_forward")
         block = ch.accepts_block("0xpayee")
         self.assertEqual(block["scheme"], "exact")
         self.assertEqual(block["amount"], "0.10")
@@ -113,14 +113,14 @@ class TestRelayOnlyDispatchesVerifiedPayments(unittest.TestCase):
 
     def test_unpaid_is_402_no_execution(self):
         r, ex = self._relay()
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-u1"})
         self.assertEqual(resp["status"], 402)
         self.assertEqual(ex.execution_count, 0)
 
     def test_bad_amount_is_402_no_execution(self):
         r, ex = self._relay()
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-u2",
                          "payment": valid_receipt(amount="0.99")})
         self.assertEqual(resp["status"], 402)
@@ -128,7 +128,7 @@ class TestRelayOnlyDispatchesVerifiedPayments(unittest.TestCase):
 
     def test_malformed_txhash_is_402_no_execution(self):
         r, ex = self._relay()
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-u3",
                          "payment": valid_receipt(tx_hash="0xzzz")})
         self.assertEqual(resp["status"], 402)
@@ -136,7 +136,7 @@ class TestRelayOnlyDispatchesVerifiedPayments(unittest.TestCase):
 
     def test_verified_payment_executes_and_settles(self):
         r, ex = self._relay()
-        resp = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        resp = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                          "idempotencyKey": "k-ok", "payment": valid_receipt()})
         self.assertEqual(resp["status"], "completed")
         self.assertTrue(resp["settled"])
@@ -144,10 +144,10 @@ class TestRelayOnlyDispatchesVerifiedPayments(unittest.TestCase):
 
     def test_replay_of_verified_payment_is_rejected_no_double_settle(self):
         r, ex = self._relay()
-        first = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        first = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                           "idempotencyKey": "k-r1", "payment": valid_receipt()})
         self.assertTrue(first["settled"])
-        replay = r.handle({"skill": "pick_and_carry", "robotId": "unitree-g1",
+        replay = r.handle({"skill": "move_forward", "robotId": "unitree-g1",
                            "idempotencyKey": "k-r2",
                            "payment": valid_receipt(),   # same txHash
                            "params": {}})
@@ -183,29 +183,27 @@ from flow.executor import MuJoCoExecutor  # noqa: E402
 class TestRealMuJoCoCorrelated(unittest.TestCase):
     """The relay settles ONLY when the REAL physics backend succeeds."""
 
-    def test_real_mujoco_pick_and_carry_succeeds(self):
+    def test_real_mujoco_walk_succeeds(self):
         ex = MuJoCoExecutor()
-        res = ex.execute("pick_and_carry", {})
+        res = ex.execute("move_forward", {})
         self.assertTrue(res.success, msg=f"mujoco sim failed: {res.message}")
+        self.assertGreater(res.metrics.get("distanceTraveled", 0), 0.9)
         self.assertTrue(res.metrics.get("reached"))
-        self.assertTrue(res.metrics.get("pickupReached"))
-        self.assertTrue(res.metrics.get("carried"))
-        self.assertGreater(res.metrics.get("objectX", 0), 1.5)
 
-    def test_real_mujoco_drop_timeout_fails(self):
+    def test_real_mujoco_obstacle_traversal(self):
         ex = MuJoCoExecutor()
-        res = ex.execute("pick_and_carry", {"dropDistance": 8.0})
-        self.assertFalse(res.success, msg="unreachable drop must fail")
-        self.assertFalse(res.metrics.get("reached"))
+        res = ex.execute("navigate_obstacle", {})
+        self.assertTrue(res.success, msg=f"mujoco sim failed: {res.message}")
+        self.assertTrue(res.metrics.get("obstacleContact"))
 
     def test_real_mujoco_timeout_does_not_settle(self):
         from flow.relay import Relay
         r = Relay(MuJoCoExecutor())
         resp = r.handle({
-            "skill": "pick_and_carry", "robotId": "unitree-g1",
+            "skill": "move_forward", "robotId": "unitree-g1",
             "idempotencyKey": "k-mujoco-timeout",
             "payment": valid_receipt(),
-            "params": {"dropDistance": 8.0},
+            "params": {"goalDistance": 5.0},
         })
         self.assertEqual(resp["status"], "failed")
         self.assertFalse(resp["settled"], "real sim timeout must never settle")
@@ -214,7 +212,7 @@ class TestRealMuJoCoCorrelated(unittest.TestCase):
         from flow.relay import Relay
         r = Relay(MuJoCoExecutor())
         resp = r.handle({
-            "skill": "pick_and_carry", "robotId": "unitree-g1",
+            "skill": "move_forward", "robotId": "unitree-g1",
             "idempotencyKey": "k-mujoco-real",
             "payment": valid_receipt(),
             "params": {},

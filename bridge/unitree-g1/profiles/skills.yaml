@@ -1,49 +1,9 @@
 # unitree-g1 skills
 schemaVersion: robot-skills.v1
 
-profileId: laok.unitree-g1-arm-001.pick-and-carry.v1
+profileId: laok.unitree-g1-arm-001.loco.v1
 
 skills:
-  - skillId: pick_and_carry
-    displayName: Pick and carry an object
-    description: >
-      Walk forward to a pickup zone, acquire a carried object (modelled as
-      co-located with the torso on this planar biped), then carry it to a
-      drop zone. Success when the torso reaches the drop zone within the
-      step budget after passing the pickup zone; otherwise a genuine physics
-      timeout (no fabricated success).
-    pricing:
-      amount: "0.10"
-      amountAtomic: 100000
-      currency: USDC
-      network: eip155:84532
-      settlement: on-success-only
-    paramsSchema:
-      type: object
-      properties:
-        pickupDistance:
-          type: number
-          description: Pickup zone X in metres (object acquired when torso passes it)
-          minimum: 0.1
-          maximum: 6.0
-          default: 1.0
-        dropDistance:
-          type: number
-          description: Drop zone X in metres (goal the torso must reach)
-          minimum: 0.2
-          maximum: 8.0
-          default: 2.0
-        speed:
-          type: number
-          minimum: 0.0
-          maximum: 1.5
-          default: 0.6
-      additionalProperties: false
-    failureModes:
-      - reason: timeout
-        description: >
-          Step budget exhausted before the drop zone was reached. Real
-          physics outcome, never a scripted success.
   - skillId: move_forward
     displayName: Walk forward
     description: >

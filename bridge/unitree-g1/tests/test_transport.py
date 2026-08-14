@@ -37,14 +37,14 @@ class FakeExecutor:
 ACTION_OK = {
     "actionId": "a1",
     "robotId": "unitree-g1",
-    "skillId": "pick_and_carry",
+    "skillId": "move_forward",
     "paramsHash": "h",
     "params": {"object": "box"},
 }
 ACTION_FAIL = {
     "actionId": "a2",
     "robotId": "unitree-g1",
-    "skillId": "pick_and_carry",
+    "skillId": "move_forward",
     "paramsHash": "h",
     "params": {"object": "unreachable"},
 }

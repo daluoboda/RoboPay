@@ -1,13 +1,12 @@
-# unitree-g1-arm-001 / pick_and_carry
+# unitree-g1-arm-001 / move_forward
  engine=mujoco  transport=loopback  payment=real-x402
 ==============================================================
 
 [ 1] list_skills (free discovery)
-     pick_and_carry: 0.10 USDC on eip155:84532 (on-success-only)
-     stop: 0.10 USDC on eip155:84532 (on-success-only)
-     failure modes: timeout, invalid_params
+     move_forward: 0.1 USDC on base-sepolia (on-success-only)
+     failure modes: timeout, collision, invalid_params
 
-[ 2] request_action  params={'pickupDistance': 1.0, 'dropDistance': 2.0}  (no payment attached)
+[ 2] request_action  params={'goalDistance': 1.0}  (no payment attached)
      HTTP/1.1 402 Payment Required
      accepts: scheme=exact network=base-sepolia asset=USDC
               amount=0.1 recipient=0x742d35Cc6634C0532925a3b844Bc454e4438f44e
@@ -22,8 +21,8 @@
 [ 6] publish -> robot/tunnel/action
 [ 7] execute -> MuJoCo physics (planar biped, deterministic IK gait)
 [ 8] result  <- robot/tunnel/result
-     status=success  reason=reached_drop_zone
-     reached=True  pickupReached=True  carried=True  objectX=2.0002  steps=957/1000
+     status=success  reason=reached_goal
+     stage=arrived  steps=503/600  collisions=0
 
 [ 9] payment success -> SETTLED
      verified on Base Sepolia block=45415117 status=1

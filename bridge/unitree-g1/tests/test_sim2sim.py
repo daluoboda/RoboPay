@@ -9,8 +9,8 @@ Two layers of checking:
 
   * Dynamic (runs wherever PyBullet is importable, i.e. Linux CI) -- runs
     every skill on MuJoCo and on Bullet and requires the two engines to agree
-    on the verdict (success / timeout), the reached flag, the carry flags and
-    the reported engine tag.
+    on the verdict (success / timeout), the reached flag, the obstacle-contact
+    flag and the reported engine tag.
 
 PyBullet publishes a source distribution only, so it compiles on Linux CI but
 generally not on a stock Windows box. The dynamic layer skips there rather
@@ -29,11 +29,8 @@ from simulator import MuJoCoSimulator
 CASES = [
     ("move_forward", {}, True),
     ("navigate_obstacle", {}, True),
-    ("pick_and_carry", {}, True),
     ("stop", {}, True),
-    ("move_forward", {"goalDistance": 8.0}, False),     # budget exhausts -> timeout
-    ("navigate_obstacle", {"goal_x": 8.0}, False),      # budget exhausts -> timeout
-    ("pick_and_carry", {"dropDistance": 8.0}, False),   # budget exhausts -> timeout
+    ("move_forward", {"goalDistance": 5.0}, False),   # budget exhausts -> timeout
 ]
 
 
@@ -71,20 +68,21 @@ class TestSpecIsSingleSource(unittest.TestCase):
         from simulator_pybullet import PyBulletSimulator
         for cls in (MuJoCoSimulator, PyBulletSimulator):
             self.assertEqual(cls.ROBOT_ID, "unitree-g1")
-            self.assertEqual(cls.SKILL_ID, "pick_and_carry")
-            for method in ("move_forward", "navigate_obstacle",
-                           "pick_and_carry", "stop"):
-                self.assertTrue(callable(getattr(cls, method)), method)
+            self.assertEqual(cls.SKILL_ID, "move_forward")
+            self.assertTrue(callable(cls.move_forward))
+            self.assertTrue(callable(cls.navigate_obstacle))
+            self.assertTrue(callable(cls.stop))
         self.assertEqual(set(BACKENDS), {"mujoco", "pybullet"})
 
     def test_model_is_not_a_replayed_animation(self):
         """Gait is an open-loop IK trajectory, not a baked animation."""
+        det = g1_spec  # determinism is asserted via the profile manifest
         from flow import profiles
         determinism = profiles.robot_profile()["simulation"]["determinism"]
         self.assertFalse(determinism["replayedAnimation"])
         self.assertTrue(determinism["policyDriven"])
         # reference the import so linters keep it; not otherwise used
-        self.assertIsNotNone(g1_spec.STAGE_STEPS)
+        self.assertIsNotNone(det.STAGE_STEPS)
 
     def test_unknown_engine_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -117,25 +115,30 @@ class TestPyBulletBackendContract(unittest.TestCase):
         return PyBulletSimulator().run(skill, params)
 
     def test_success_path_completes(self):
-        r = self._run("pick_and_carry", {})
+        r = self._run("move_forward", {})
         self.assertTrue(r.success, r.to_dict())
         self.assertEqual(r.metrics["engine"], "pybullet")
         self.assertTrue(r.metrics["reached"])
-        self.assertTrue(r.metrics["carried"])
         self.assertGreater(r.metrics["distanceTraveled"], 0.9)
 
+    def test_obstacle_traversal_reports_contact(self):
+        r = self._run("navigate_obstacle", {})
+        self.assertTrue(r.success, r.to_dict())
+        self.assertTrue(r.metrics["obstacleContact"])
+        self.assertGreater(r.metrics["distanceTraveled"], 1.8)
+
     def test_timeout_path_completes(self):
-        r = self._run("pick_and_carry", {"dropDistance": 8.0})
+        r = self._run("move_forward", {"goalDistance": 5.0})
         self.assertFalse(r.success)
         self.assertFalse(r.metrics["reached"])
 
     def test_metric_schema_matches_mujoco(self):
-        mj = MuJoCoSimulator().pick_and_carry({})
-        bt = self._run("pick_and_carry", {})
+        mj = MuJoCoSimulator().move_forward({})
+        bt = self._run("move_forward", {})
         self.assertEqual(set(mj.metrics), set(bt.metrics))
 
     def test_constraint_and_urdf_calls_were_made(self):
-        self._run("pick_and_carry", {})
+        self._run("move_forward", {})
         S = self.stub.S
         for call in ("loadURDF", "setJointMotorControl2", "stepSimulation",
                      "setCollisionFilterGroupMask"):
@@ -144,13 +147,13 @@ class TestPyBulletBackendContract(unittest.TestCase):
     def test_failure_still_blocks_settlement(self):
         from flow.relay import Relay
         out = Relay(SimExecutor("pybullet")).handle({
-            "skill": "pick_and_carry", "robotId": "unitree-g1",
+            "skill": "move_forward", "robotId": "unitree-g1",
             "idempotencyKey": "stub-fail",
             "payment": {"txHash": "0x" + "a" * 64, "verified": True,
                         "amount": "0.10", "network": "eip155:84532",
                         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-                        "payer": "0xpayer0000000000000000000000000000001"},
-            "params": {"dropDistance": 8.0}})
+                        "payer": "0xpayer0000000000000000000000000000000001"},
+            "params": {"goalDistance": 5.0}})
         self.assertEqual(out["status"], "failed")
         self.assertFalse(out["settled"])
 
@@ -162,48 +165,43 @@ class TestSimToSimAgreement(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from simulator_pybullet import PyBulletSimulator
-        cls.mj = {(c[0], c[1]): MuJoCoSimulator().run(c[0], c[1]) for c in CASES}
-        cls.bt = {(c[0], c[1]): PyBulletSimulator().run(c[0], c[1]) for c in CASES}
+        cls.mj = {c[0]: MuJoCoSimulator().run(c[0], c[1]) for c in CASES}
+        cls.bt = {c[0]: PyBulletSimulator().run(c[0], c[1]) for c in CASES}
 
     def test_verdicts_agree(self):
-        for skill, params, expect in CASES:
-            key = (skill, params)
-            self.assertEqual(self.mj[key].success, expect, key)
-            self.assertEqual(self.bt[key].success, expect, f"bullet disagrees on {key}")
+        for skill, _params, expect in CASES:
+            self.assertEqual(self.mj[skill].success, expect, skill)
+            self.assertEqual(self.bt[skill].success, expect,
+                             f"bullet disagrees on {skill}")
 
     def test_reached_flags_agree(self):
-        for skill, params, _expect in CASES:
-            key = (skill, params)
-            self.assertEqual(self.mj[key].metrics["reached"],
-                             self.bt[key].metrics["reached"], key)
+        for skill, _params, _expect in CASES:
+            self.assertEqual(self.mj[skill].metrics["reached"],
+                             self.bt[skill].metrics["reached"], skill)
 
-    def test_carry_flags_agree(self):
-        key = ("pick_and_carry", {})
-        self.assertEqual(self.mj[key].metrics["carried"],
-                         self.bt[key].metrics["carried"], key)
-        self.assertEqual(self.mj[key].metrics["pickupReached"],
-                         self.bt[key].metrics["pickupReached"], key)
+    def test_obstacle_contact_flags_agree(self):
+        for skill, _params, _expect in CASES:
+            self.assertEqual(self.mj[skill].metrics["obstacleContact"],
+                             self.bt[skill].metrics["obstacleContact"], skill)
 
-    def test_walking_cases_traveled_similar_distance(self):
-        for skill, params, expect in CASES:
-            if not expect or skill == "stop":
+    def test_success_cases_traveled_similar_distance(self):
+        for skill, _params, expect in CASES:
+            if not expect:
                 continue
-            key = (skill, params)
-            a = self.mj[key].metrics["distanceTraveled"]
-            b = self.bt[key].metrics["distanceTraveled"]
+            a = self.mj[skill].metrics["distanceTraveled"]
+            b = self.bt[skill].metrics["distanceTraveled"]
             self.assertGreater(a, 0.8)
             self.assertGreater(b, 0.8)
-            self.assertLess(abs(a - b), 0.30, f"distance drift: {key}")
+            self.assertLess(abs(a - b), 0.30, f"distance drift: {skill}")
 
     def test_engine_tag_is_reported(self):
-        self.assertEqual(self.mj[("pick_and_carry", {})].metrics["engine"], "mujoco")
-        self.assertEqual(self.bt[("pick_and_carry", {})].metrics["engine"], "pybullet")
+        self.assertEqual(self.mj["move_forward"].metrics["engine"], "mujoco")
+        self.assertEqual(self.bt["move_forward"].metrics["engine"], "pybullet")
 
     def test_metric_schema_is_identical(self):
-        for skill, params, _expect in CASES:
-            key = (skill, params)
-            self.assertEqual(set(self.mj[key].metrics),
-                             set(self.bt[key].metrics), key)
+        for skill, _params, _expect in CASES:
+            self.assertEqual(set(self.mj[skill].metrics),
+                             set(self.bt[skill].metrics), skill)
 
     def test_failures_never_settle_on_either_engine(self):
         from flow.relay import Relay
@@ -215,7 +213,7 @@ class TestSimToSimAgreement(unittest.TestCase):
             for skill, params, expect in CASES:
                 r = Relay(SimExecutor(engine))
                 out = r.handle({"skill": skill, "robotId": "unitree-g1",
-                                "idempotencyKey": f"{engine}-{skill}-{params}",
+                                "idempotencyKey": f"{engine}-{skill}",
                                 "payment": paid, "params": dict(params)})
                 self.assertEqual(out["settled"], expect, f"{engine}/{skill}")
 
