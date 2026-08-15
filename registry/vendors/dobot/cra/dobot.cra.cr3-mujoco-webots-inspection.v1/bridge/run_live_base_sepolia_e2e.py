@@ -45,6 +45,19 @@ FABRIC_API_BASE = os.environ.get("FABRIC_API_BASE_URL", "https://api.fabric.foun
 FABRIC_PROXY_WS = os.environ.get("PROXY_WS_URL", "wss://api.fabric.foundation/api/core/ws/robot")
 
 
+def _source_commit_sha() -> str:
+    configured = os.environ.get("ROBO_PAY_COMMIT_SHA", "").strip()
+    if configured:
+        return configured
+    completed = subprocess.run(
+        ["git", "-C", str(PROFILE_ROOT), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
 def _required(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -246,6 +259,11 @@ def main(argv: list[str] | None = None) -> int:
     payee = os.environ.get("ROBO_PAYEE_ADDRESS") or _required("ROBOT_PAYEE_ADDRESS")
     private_key = "" if args.dry_run else (os.environ.get("PRIVATE_KEY") or _required("BASE_SEPOLIA_PRIVATE_KEY"))
     binary = _tunnel_binary()
+    source_commit = _source_commit_sha()
+    visual_start_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS", "0"))
+    visual_target_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS", "0"))
+    visual_final_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS", "0"))
+    print(f"Evidence commit: {source_commit}", flush=True)
     action_id = f"dobot-cr3-inspection-{int(time.time())}"
     action_body = {
         "action": INSPECTION_SKILL,
@@ -284,7 +302,12 @@ def main(argv: list[str] | None = None) -> int:
                 "PYTHONPATH": str(PROFILE_ROOT / "bridge"),
                 "ZENOH_CONFIG": str(zenoh_config),
                 "DOBOT_CR3_MUJOCO_VIEWER": "true" if args.visual else "false",
-                "DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS": "300",
+                "DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER": os.environ.get(
+                    "DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER", "false"
+                ),
+                "DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS": str(visual_start_hold_seconds),
+                "DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS": str(visual_target_hold_seconds),
+                "DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS": str(visual_final_hold_seconds),
             }
         )
         bridge = subprocess.Popen(
@@ -361,6 +384,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError("successful terminal status omitted settlement transaction")
             evidence = {
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "source_commit": source_commit,
                 "network": NETWORK,
                 "payer": account.address,
                 "payee": payee,
@@ -368,6 +392,9 @@ def main(argv: list[str] | None = None) -> int:
                 "action_id": action_id,
                 "unpaid_http_status": unpaid.status_code,
                 "paid_http_status": paid.status_code,
+                "visual_start_hold_seconds": visual_start_hold_seconds,
+                "visual_target_hold_seconds": visual_target_hold_seconds,
+                "visual_final_hold_seconds": visual_final_hold_seconds,
                 "terminal_status": terminal,
                 "transaction_hash": transaction,
                 "basescan_url": f"https://sepolia.basescan.org/tx/{transaction}",

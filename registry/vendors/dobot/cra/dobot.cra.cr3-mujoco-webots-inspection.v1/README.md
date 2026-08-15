@@ -70,6 +70,14 @@ no chain transaction), use:
 ./run-live-base-sepolia-visual.ps1 -DryRun
 ```
 
+For the final operator recording, the launcher prints the exact source commit
+before any request, pauses after the paid viewer opens so the terminal and
+MuJoCo window can be arranged side by side, holds the initial pose and each of
+the three visible tag confirmations, then holds the final pose for three
+seconds and closes the viewer automatically. The correlated result and Base
+Sepolia settlement therefore appear without requiring the operator to close
+the simulator manually.
+
 ## Tunnel, payment, and identity boundary
 
 The profile bridge contains no private key, payee address, x402 verifier, or settlement code. It accepts only a **private post-verification Tunnel ActionEvent** carrying `action_id`, `robot_id`, `skill_id`, canonical `params_hash`, `idempotency_key`, payment payload, and payment requirements. It fails closed for absent/malformed evidence, wrong robot, missing/unknown skill, parameter drift, legacy uncorrelated events, and replay.

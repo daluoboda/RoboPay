@@ -36,8 +36,22 @@ def production_episode_runner(request: InspectionRequest) -> dict[str, Any]:
     """Run the real simulator, optionally keeping its desktop scene visible."""
 
     visual = os.environ.get("DOBOT_CR3_MUJOCO_VIEWER", "").strip().lower() in {"1", "true", "yes"}
-    hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS", "180")) if visual else 0.0
-    return run_mujoco_episode(request, viewer=visual, viewer_hold_seconds=max(0.0, hold_seconds))
+    wait_for_enter = visual and os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    start_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS", "0")) if visual else 0.0
+    target_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS", "0")) if visual else 0.0
+    final_hold_seconds = float(os.environ.get("DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS", "3")) if visual else 0.0
+    return run_mujoco_episode(
+        request,
+        viewer=visual,
+        viewer_wait_for_enter=wait_for_enter,
+        viewer_start_hold_seconds=max(0.0, start_hold_seconds),
+        viewer_target_hold_seconds=max(0.0, target_hold_seconds),
+        viewer_hold_seconds=max(0.0, final_hold_seconds),
+    )
 
 
 class EventContractError(ValueError):

@@ -24,6 +24,9 @@ def run_mujoco_episode(
     *,
     stop_event: Event | None = None,
     viewer: bool = False,
+    viewer_wait_for_enter: bool = False,
+    viewer_start_hold_seconds: float = 0.0,
+    viewer_target_hold_seconds: float = 0.0,
     viewer_hold_seconds: float = 0.0,
 ) -> dict[str, Any]:
     """Execute an online three-target task using vendor joints and MuJoCo state."""
@@ -51,6 +54,13 @@ def run_mujoco_episode(
         viewer_context.cam.distance = 1.55
         viewer_context.cam.azimuth = 140.0
         viewer_context.cam.elevation = -24.0
+        viewer_context.sync()
+        if viewer_wait_for_enter:
+            input("[mujoco] Viewer ready. Arrange it beside this terminal, then press Enter to begin CR3 motion: ")
+        start_deadline = time.monotonic() + max(0.0, viewer_start_hold_seconds)
+        while viewer_context.is_running() and time.monotonic() < start_deadline:
+            viewer_context.sync()
+            time.sleep(0.02)
 
     state: dict[str, Any] = {
         "failure_reason": None,
@@ -74,7 +84,19 @@ def run_mujoco_episode(
             measured_joints = [float(data.qpos[address]) for address in qpos_addresses]
             tool_position = tuple(float(value) for value in data.xpos[tool_id])
             if data.time >= next_plan_time:
+                observed_before_update = len(task.observed)
                 task.update(tool_position, float(data.time))
+                if viewer_context is not None and len(task.observed) > observed_before_update:
+                    observed = task.observed[-1]
+                    print(
+                        f"[mujoco] target confirmed: {observed['target_id']} "
+                        f"at t={observed['time_seconds']}s",
+                        flush=True,
+                    )
+                    target_deadline = time.monotonic() + max(0.0, viewer_target_hold_seconds)
+                    while viewer_context.is_running() and time.monotonic() < target_deadline:
+                        viewer_context.sync()
+                        time.sleep(0.02)
                 if task.complete:
                     break
                 desired = list(task.plan(measured_joints, tool_position))
@@ -142,4 +164,7 @@ def run_mujoco_episode(
         "planner": "nearest-unobserved tag coverage using iterative damped-least-squares IK from measured vendor joint state",
         "state_authority": "MuJoCo Link6 body pose, vendor-joint qpos, actuator force, contacts, and finite dynamic state",
         "viewer_enabled": viewer,
+        "viewer_start_hold_seconds": max(0.0, viewer_start_hold_seconds),
+        "viewer_target_hold_seconds": max(0.0, viewer_target_hold_seconds),
+        "viewer_final_hold_seconds": max(0.0, viewer_hold_seconds),
     }
