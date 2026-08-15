@@ -2,6 +2,8 @@
 param(
   [switch]$DryRun,
   [switch]$OpenBaseScan,
+  [ValidateRange(0, 20)][int]$ViewerStartSeconds = 6,
+  [ValidateRange(0, 20)][int]$FinalHoldSeconds = 3,
   [Parameter(Mandatory = $false)][string]$TunnelBin = $env:TUNNEL_BIN,
   [Parameter(Mandatory = $false)][string]$ZenohdBin = $env:ZENOH_ROUTER_BIN
 )
@@ -42,11 +44,24 @@ $env:TUNNEL_BIN = (Resolve-Path -LiteralPath $TunnelBin).Path
 $env:ROBOT_PAYEE_ADDRESS = $payee
 $env:ROBO_PAYEE_ADDRESS = $payee
 $env:PYTHONPATH = Join-Path $profileRoot 'bridge'
+$commitSha = (& git -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $commitSha -notmatch '^[0-9a-f]{40}$') {
+  throw 'Unable to resolve the exact Git commit for the visual evidence run.'
+}
+$env:ROBO_PAY_COMMIT_SHA = $commitSha
+$env:LIMX_TRON1_MUJOCO_VIEWER_START_HOLD_SECONDS = [string]$ViewerStartSeconds
+$env:LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS = [string]$FinalHoldSeconds
 $arguments = @((Join-Path $profileRoot 'bridge\run_live_base_sepolia_e2e.py'), '--visual')
 if ($DryRun) { $arguments += '--dry-run' }
 if ($OpenBaseScan) { $arguments += '--open-basescan' }
 
 try {
+  Write-Host 'OBS sequence: exact commit -> unpaid 402 -> paid 202/action_id -> complete 10-waypoint course -> correlated result -> settlement -> BaseScan' -ForegroundColor Cyan
+  Write-Host "Evidence commit: $commitSha" -ForegroundColor Cyan
+  Write-Host "The full course uses a fixed overview camera; the initial state holds for $ViewerStartSeconds seconds and the final goal for $FinalHoldSeconds seconds." -ForegroundColor Cyan
+  if (-not $DryRun) {
+    [void](Read-Host 'Start OBS with this terminal visible, then press Enter to begin')
+  }
   $routerListening = Test-NetConnection -ComputerName 127.0.0.1 -Port 7447 -InformationLevel Quiet -WarningAction SilentlyContinue
   if (-not $routerListening) {
     $zenohdWindowsPath = (Resolve-Path -LiteralPath $ZenohdBin).Path
@@ -81,6 +96,7 @@ try {
   }
   exit $runnerExitCode
 } finally {
+  Remove-Item Env:ROBO_PAY_COMMIT_SHA -ErrorAction SilentlyContinue
   if ($routerStartedHere -and $null -ne $routerProcess -and -not $routerProcess.HasExited) {
     Stop-Process -Id $routerProcess.Id -Force -ErrorAction SilentlyContinue
   }

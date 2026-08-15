@@ -49,6 +49,19 @@ def _required(name: str) -> str:
     return value
 
 
+def _source_commit_sha() -> str:
+    configured = os.environ.get("ROBO_PAY_COMMIT_SHA", "").strip()
+    if configured:
+        return configured
+    completed = subprocess.run(
+        ["git", "-C", str(PROFILE_ROOT.parents[4]), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
 def _wsl_path(path: Path) -> str:
     resolved = path.resolve()
     drive = resolved.drive.rstrip(":")
@@ -244,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     payee = os.environ.get("ROBO_PAYEE_ADDRESS") or _required("ROBOT_PAYEE_ADDRESS")
     private_key = "" if args.dry_run else (os.environ.get("PRIVATE_KEY") or _required("BASE_SEPOLIA_PRIVATE_KEY"))
     binary = _tunnel_binary()
+    source_commit = _source_commit_sha()
     action_id = f"limx-tron1-navigation-{int(time.time())}"
     action_body = {
         "action": NAVIGATION_SKILL,
@@ -252,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         "idempotency_key": action_id,
         "params": {},
     }
+    print(f"[client] evidence commit {source_commit}", flush=True)
 
     with tempfile.TemporaryDirectory(prefix="robopay_limx_tron1_base_sepolia_") as directory:
         temp = Path(directory)
@@ -283,9 +298,12 @@ def main(argv: list[str] | None = None) -> int:
                 "ZENOH_CONFIG": str(zenoh_config),
                 "LIMX_TRON1_WEBOTS_VIEWER": "false",
                 "LIMX_TRON1_MUJOCO_VIEWER": "true" if args.visual else "false",
-                # The result must return before the Tunnel's execution timeout;
-                # the viewer therefore closes at terminal simulator state.
-                "LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS": "0",
+                "LIMX_TRON1_MUJOCO_VIEWER_START_HOLD_SECONDS": os.environ.get(
+                    "LIMX_TRON1_MUJOCO_VIEWER_START_HOLD_SECONDS", "6"
+                ),
+                "LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS": os.environ.get(
+                    "LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS", "3"
+                ),
             }
         )
         bridge = subprocess.Popen(
@@ -361,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError("successful terminal status omitted settlement transaction")
             evidence = {
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "source_commit": source_commit,
                 "network": NETWORK,
                 "payer": account.address,
                 "payee": payee,
@@ -368,6 +387,8 @@ def main(argv: list[str] | None = None) -> int:
                 "action_id": action_id,
                 "unpaid_http_status": unpaid.status_code,
                 "paid_http_status": paid.status_code,
+                "visual_start_hold_seconds": float(bridge_env["LIMX_TRON1_MUJOCO_VIEWER_START_HOLD_SECONDS"]) if args.visual else 0.0,
+                "visual_final_hold_seconds": float(bridge_env["LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS"]) if args.visual else 0.0,
                 "terminal_status": terminal,
                 "transaction_hash": transaction,
                 "basescan_url": f"https://sepolia.basescan.org/tx/{transaction}",

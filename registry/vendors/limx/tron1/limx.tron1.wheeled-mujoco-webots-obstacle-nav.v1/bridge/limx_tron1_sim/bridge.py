@@ -37,7 +37,13 @@ def production_episode_runner(request: NavigationRequest) -> dict[str, Any]:
         return run_webots_episode(request, viewer=True)
     visual = os.environ.get("LIMX_TRON1_MUJOCO_VIEWER", "").strip().lower() in {"1", "true", "yes"}
     hold_seconds = float(os.environ.get("LIMX_TRON1_MUJOCO_VIEWER_HOLD_SECONDS", "180")) if visual else 0.0
-    return run_mujoco_episode(request, viewer=visual, viewer_hold_seconds=max(0.0, hold_seconds))
+    start_hold_seconds = float(os.environ.get("LIMX_TRON1_MUJOCO_VIEWER_START_HOLD_SECONDS", "0")) if visual else 0.0
+    return run_mujoco_episode(
+        request,
+        viewer=visual,
+        viewer_hold_seconds=max(0.0, hold_seconds),
+        viewer_start_hold_seconds=max(0.0, start_hold_seconds),
+    )
 
 
 class EventContractError(ValueError):

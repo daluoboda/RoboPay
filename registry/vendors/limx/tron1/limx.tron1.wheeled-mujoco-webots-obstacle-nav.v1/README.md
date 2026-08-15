@@ -131,6 +131,10 @@ The launcher starts the real bridge, Zenoh and WSL Tunnel, shows the unpaid
 the correlated result and settlement, then opens the Base Sepolia transaction.
 The MuJoCo viewer remains visible throughout the paid action and closes at its terminal state,
 so the simulator and settlement can appear in the same recording.
+The paid visual runner uses the fixed `course_overview` camera so the complete
+ten-waypoint, three-obstacle course stays in frame. It displays the exact Git
+revision before discovery, holds the initial scene briefly for window layout,
+and closes the viewer after a bounded final-goal hold.
 
 ## CI and evidence
 

@@ -41,6 +41,7 @@ def run_mujoco_episode(
     *,
     viewer: bool = False,
     viewer_hold_seconds: float = 0.0,
+    viewer_start_hold_seconds: float = 0.0,
 ) -> dict[str, Any]:
     if request.skill_id == STOP_SKILL:
         return {
@@ -77,11 +78,13 @@ def run_mujoco_episode(
         import mujoco.viewer
 
         window = mujoco.viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=False)
-        window.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        window.cam.trackbodyid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_Link")
-        window.cam.distance = 5.2
-        window.cam.azimuth = 135.0
-        window.cam.elevation = -24.0
+        window.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+        window.cam.fixedcamid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "course_overview")
+        start_deadline = time.monotonic() + viewer_start_hold_seconds
+        while window.is_running() and time.monotonic() < start_deadline:
+            window.sync()
+            time.sleep(0.03)
+        start_wall = time.monotonic()
 
     max_steps = int(request.max_duration_sec / model.opt.timestep)
     try:
@@ -175,6 +178,7 @@ def run_mujoco_episode(
             while window.is_running() and time.monotonic() < deadline:
                 window.sync()
                 time.sleep(0.03)
+            window.close()
         return result
     finally:
         if window is not None:
