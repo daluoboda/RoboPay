@@ -302,9 +302,6 @@ def main(argv: list[str] | None = None) -> int:
                 "PYTHONPATH": str(PROFILE_ROOT / "bridge"),
                 "ZENOH_CONFIG": str(zenoh_config),
                 "DOBOT_CR3_MUJOCO_VIEWER": "true" if args.visual else "false",
-                "DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER": os.environ.get(
-                    "DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER", "false"
-                ),
                 "DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS": str(visual_start_hold_seconds),
                 "DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS": str(visual_target_hold_seconds),
                 "DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS": str(visual_final_hold_seconds),

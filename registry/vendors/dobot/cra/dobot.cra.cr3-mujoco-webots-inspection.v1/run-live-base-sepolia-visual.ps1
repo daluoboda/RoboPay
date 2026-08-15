@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-  [ValidateRange(0, 20)][int]$StartHoldSeconds = 6,
+  [ValidateRange(0, 30)][int]$PreflightSeconds = 12,
+  [ValidateRange(0, 30)][int]$StartHoldSeconds = 10,
   [ValidateRange(0, 20)][int]$TargetHoldSeconds = 2,
   [ValidateRange(0, 20)][int]$FinalHoldSeconds = 3,
   [switch]$DryRun,
@@ -40,26 +41,28 @@ if ($LASTEXITCODE -ne 0 -or $commitSha -notmatch '^[0-9a-f]{40}$') {
   throw 'Unable to resolve the exact Git commit for the visual evidence run.'
 }
 $env:ROBO_PAY_COMMIT_SHA = $commitSha
-$env:DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER = 'true'
 $env:DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS = [string]$StartHoldSeconds
 $env:DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS = [string]$TargetHoldSeconds
 $env:DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS = [string]$FinalHoldSeconds
 
-Write-Host 'Arrange this terminal for a stable split-screen recording, then press Enter to begin.'
+Write-Host 'Prepare a stable split-screen recording. No Enter is required before or during motion.'
 Write-Host ''
 Write-Host 'OBS sequence: bridge ready -> discovery -> unpaid 402 -> first paid 202/action_id -> CR3 MuJoCo three-tag motion -> correlated result -> settlement -> BaseScan'
 Write-Host "Evidence commit: $commitSha"
 Write-Host "Visual holds: initial ${StartHoldSeconds}s; each tag ${TargetHoldSeconds}s; final ${FinalHoldSeconds}s."
-Write-Host 'After HTTP 202, the MuJoCo viewer will pause once so it can be placed beside this terminal before motion starts.'
+Write-Host "The live sequence starts automatically in ${PreflightSeconds}s."
+Write-Host 'After HTTP 202, the MuJoCo viewer holds its initial pose so it can be placed beside this terminal; motion then starts automatically.'
 Write-Host 'Secrets are loaded from the current process and will not be printed or written.'
-[void](Read-Host 'Press Enter to begin the current-head recording')
+for ($remaining = $PreflightSeconds; $remaining -gt 0; $remaining--) {
+  Write-Host "Starting in $remaining..."
+  Start-Sleep -Seconds 1
+}
 $arguments = @((Join-Path $profileRoot 'bridge\run_live_base_sepolia_e2e.py'), '--visual')
 if ($DryRun) { $arguments += '--dry-run' }
 if ($OpenBaseScan) { $arguments += '--open-basescan' }
 py -3 @arguments
 $exitCode = $LASTEXITCODE
 Remove-Item Env:ROBO_PAY_COMMIT_SHA -ErrorAction SilentlyContinue
-Remove-Item Env:DOBOT_CR3_MUJOCO_VIEWER_WAIT_FOR_ENTER -ErrorAction SilentlyContinue
 Remove-Item Env:DOBOT_CR3_MUJOCO_VIEWER_START_HOLD_SECONDS -ErrorAction SilentlyContinue
 Remove-Item Env:DOBOT_CR3_MUJOCO_VIEWER_TARGET_HOLD_SECONDS -ErrorAction SilentlyContinue
 Remove-Item Env:DOBOT_CR3_MUJOCO_VIEWER_HOLD_SECONDS -ErrorAction SilentlyContinue

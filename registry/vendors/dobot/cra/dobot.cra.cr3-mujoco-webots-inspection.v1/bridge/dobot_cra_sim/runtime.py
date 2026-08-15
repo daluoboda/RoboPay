@@ -24,7 +24,6 @@ def run_mujoco_episode(
     *,
     stop_event: Event | None = None,
     viewer: bool = False,
-    viewer_wait_for_enter: bool = False,
     viewer_start_hold_seconds: float = 0.0,
     viewer_target_hold_seconds: float = 0.0,
     viewer_hold_seconds: float = 0.0,
@@ -55,8 +54,11 @@ def run_mujoco_episode(
         viewer_context.cam.azimuth = 140.0
         viewer_context.cam.elevation = -24.0
         viewer_context.sync()
-        if viewer_wait_for_enter:
-            input("[mujoco] Viewer ready. Arrange it beside this terminal, then press Enter to begin CR3 motion: ")
+        print(
+            f"[mujoco] viewer ready; motion starts automatically after "
+            f"{max(0.0, viewer_start_hold_seconds):g}s initial hold",
+            flush=True,
+        )
         start_deadline = time.monotonic() + max(0.0, viewer_start_hold_seconds)
         while viewer_context.is_running() and time.monotonic() < start_deadline:
             viewer_context.sync()

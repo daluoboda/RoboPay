@@ -71,12 +71,13 @@ no chain transaction), use:
 ```
 
 For the final operator recording, the launcher prints the exact source commit
-before any request, pauses after the paid viewer opens so the terminal and
-MuJoCo window can be arranged side by side, holds the initial pose and each of
-the three visible tag confirmations, then holds the final pose for three
-seconds and closes the viewer automatically. The correlated result and Base
-Sepolia settlement therefore appear without requiring the operator to close
-the simulator manually.
+before any request and starts after a visible countdown. After the paid viewer
+opens, it holds the initial pose for ten seconds so the terminal and MuJoCo
+window can be arranged side by side; no interactive prompt blocks execution.
+It then holds each of the three visible tag confirmations, holds the final pose
+for three seconds, and closes the viewer automatically. The correlated result
+and Base Sepolia settlement therefore appear without requiring the operator to
+close the simulator manually.
 
 ## Tunnel, payment, and identity boundary
 
