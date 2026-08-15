@@ -1,0 +1,72 @@
+schemaVersion: execution-mapping.v1
+profileId: laok.fetch-001.fetch-mobile-pick.v1
+
+transport:
+  type: zenoh
+  actionTopic: robot/tunnel/action
+  resultTopic: robot/tunnel/result
+  actionSchema: robopay-action.v1
+  resultSchema: robot-action-result.v1
+
+envelope:
+  requiredFields:
+    - actionId
+    - robotId
+    - skillId
+    - params
+    - paramsHash
+    - idempotencyKey
+    - payment
+  requiredPaymentFields:
+    - provider
+    - authorizationId
+    - verified
+    - status
+    - settled
+    - network
+    - asset
+    - amount
+    - payTo
+    - issuedAt
+    - expiresAt
+  paramsHashAlgorithm: sha256(canonical-json(params))
+  correlationField: actionId
+
+mappings:
+  fetch_mobile_pick:
+    output: mujoco_simulator
+    projectNameFrom: local-config.skills.fetch_mobile_pick.project_name
+    sdkCommand: fetch_mobile_pick
+    requestParametersAllowed: false
+    completion:
+      runningEvidence:
+        - stage equals lift_a
+        - graspState equals attached
+      successEvidence:
+        - graspState equals placed
+        - placeStable equals true
+        - a_z greater than shelf_z
+        - collisionCount equals 0
+        - contactSamples greater than 0
+    failure:
+      modes:
+        - unreachable
+        - collision
+        - timeout
+        - grasp_failed
+        - place_failed
+      action: Abort
+      retryRunScript: false
+
+replayProtection:
+  storage: sqlite
+  key: idempotencyKey
+  uniqueFields:
+    - actionId
+    - payment.authorizationId
+  fingerprintFields:
+    - actionId
+    - robotId
+    - skillId
+    - paramsHash
+    - payment.authorizationId

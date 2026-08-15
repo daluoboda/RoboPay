@@ -1,0 +1,25 @@
+schemaVersion: robot-skills.v1
+profileId: laok.fetch-001.fetch-mobile-pick.v1
+
+skills:
+  - skillId: fetch_mobile_pick
+    name: Physics-executed fetch mobile pick
+    description: >-
+      7-phase MuJoCo fetch_mobile_pick controller: approaches cube A, descends,
+      closes gripper (contact-gated), lifts A, traverses to above a static
+      shelf, descends and releases A onto the shelf, then verifies A rests
+      stably on the shelf. Metrics: object_lifted, place_stability, contact
+      force.
+    tier: 1
+    customBehavior: true
+    params: {}
+    paymentRequired: true
+    timeoutSec: 30
+    safety:
+      requiresEnabledIdle: true
+      requiresNoActiveProject: true
+      emergencyStop: software failsafe aborts the simulation on anomaly
+      softwareFailureAction: abort simulation, never retry the lift
+    implementation:
+      source: bridge/laok_fetch_001_zenoh_bridge.py
+      artifactManifest: bridge/simulator.py
