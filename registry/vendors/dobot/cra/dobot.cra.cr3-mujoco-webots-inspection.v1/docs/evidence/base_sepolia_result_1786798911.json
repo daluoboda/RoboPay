@@ -1,0 +1,268 @@
+{
+  "timestamp": "2026-08-15T13:01:51Z",
+  "source_commit": "39c1814edfe938c148b3fc59fd8ce593fb50dbe1",
+  "network": "eip155:84532",
+  "payer": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+  "payee": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+  "robot_id": "dobot-cr3-sim-01",
+  "action_id": "dobot-cr3-inspection-1786798884",
+  "unpaid_http_status": 402,
+  "paid_http_status": 202,
+  "visual_start_hold_seconds": 10.0,
+  "visual_target_hold_seconds": 2.0,
+  "visual_final_hold_seconds": 3.0,
+  "terminal_status": {
+    "action_id": "dobot-cr3-inspection-1786798884",
+    "idempotency_key": "dobot-cr3-inspection-1786798884",
+    "params_hash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "result": {
+      "completion_reason": "all_three_tags_observed",
+      "course": {
+        "course_hash": "240dcc9b840562dd91e4eb6b07f953be67fb062e60ede735593b296b6fa5a107",
+        "course_id": "dobot-cr3-three-tag-tool-center-inspection-v1",
+        "course_version": 1,
+        "frame": "Dobot CR3 base frame; Link6 origin is the measured tool center",
+        "success_thresholds": {
+          "require_all_tags": true,
+          "require_finite_joint_state": true,
+          "stable_samples_per_tag": 8,
+          "target_tolerance_m": 0.045
+        },
+        "targets": [
+          {
+            "color_rgb": [
+              1,
+              0.62,
+              0.05
+            ],
+            "id": "amber_tag",
+            "position_m": [
+              -0.21434,
+              -0.11116,
+              0.65239
+            ]
+          },
+          {
+            "color_rgb": [
+              0.05,
+              0.76,
+              0.96
+            ],
+            "id": "cyan_tag",
+            "position_m": [
+              0.0899,
+              -0.21113,
+              0.56701
+            ]
+          },
+          {
+            "color_rgb": [
+              0.66,
+              0.26,
+              0.95
+            ],
+            "id": "violet_tag",
+            "position_m": [
+              -0.09494,
+              -0.21166,
+              0.62337
+            ]
+          }
+        ]
+      },
+      "course_hash": "240dcc9b840562dd91e4eb6b07f953be67fb062e60ede735593b296b6fa5a107",
+      "course_id": "dobot-cr3-three-tag-tool-center-inspection-v1",
+      "final_joint_positions_rad": [
+        0.08278,
+        -0.89408,
+        0.78394,
+        1.08325,
+        -0.55168,
+        0.37873
+      ],
+      "final_tool_position_m": [
+        0.12966,
+        -0.20771,
+        0.55478
+      ],
+      "finite_state": true,
+      "measured_tool_trajectory": [
+        {
+          "time_seconds": 0.002,
+          "tool_position_m": [
+            -0.00896,
+            -0.23303,
+            0.7546
+          ]
+        },
+        {
+          "time_seconds": 0.25,
+          "tool_position_m": [
+            -0.15444,
+            -0.2105,
+            0.5976
+          ]
+        },
+        {
+          "time_seconds": 0.5,
+          "tool_position_m": [
+            -0.11169,
+            -0.21154,
+            0.61425
+          ]
+        },
+        {
+          "time_seconds": 0.75,
+          "tool_position_m": [
+            -0.09947,
+            -0.21112,
+            0.61646
+          ]
+        },
+        {
+          "time_seconds": 1,
+          "tool_position_m": [
+            -0.09676,
+            -0.21081,
+            0.61715
+          ]
+        },
+        {
+          "time_seconds": 1.25,
+          "tool_position_m": [
+            -0.13094,
+            -0.15969,
+            0.6438
+          ]
+        },
+        {
+          "time_seconds": 1.5,
+          "tool_position_m": [
+            -0.20086,
+            -0.11409,
+            0.65328
+          ]
+        },
+        {
+          "time_seconds": 1.75,
+          "tool_position_m": [
+            -0.22097,
+            -0.10725,
+            0.6433
+          ]
+        },
+        {
+          "time_seconds": 2,
+          "tool_position_m": [
+            -0.22456,
+            -0.10661,
+            0.64374
+          ]
+        },
+        {
+          "time_seconds": 2.252,
+          "tool_position_m": [
+            -0.22609,
+            -0.10607,
+            0.64254
+          ]
+        },
+        {
+          "time_seconds": 2.502,
+          "tool_position_m": [
+            0.00807,
+            -0.21521,
+            0.5584
+          ]
+        },
+        {
+          "time_seconds": 2.752,
+          "tool_position_m": [
+            0.11218,
+            -0.20622,
+            0.55731
+          ]
+        },
+        {
+          "time_seconds": 3.002,
+          "tool_position_m": [
+            0.12915,
+            -0.2067,
+            0.55585
+          ]
+        },
+        {
+          "time_seconds": 3.252,
+          "tool_position_m": [
+            0.12806,
+            -0.20687,
+            0.55699
+          ]
+        }
+      ],
+      "minimum_tool_height_m": 0.55361,
+      "observed_tags": [
+        {
+          "measured_error_m": 0.01057,
+          "measured_tool_position_m": [
+            -0.09737,
+            -0.20973,
+            0.61327
+          ],
+          "target_id": "violet_tag",
+          "time_seconds": 1.2
+        },
+        {
+          "measured_error_m": 0.01683,
+          "measured_tool_position_m": [
+            -0.22612,
+            -0.10615,
+            0.64146
+          ],
+          "target_id": "amber_tag",
+          "time_seconds": 2.282
+        },
+        {
+          "measured_error_m": 0.04174,
+          "measured_tool_position_m": [
+            0.12966,
+            -0.20771,
+            0.55478
+          ],
+          "target_id": "cyan_tag",
+          "time_seconds": 3.482
+        }
+      ],
+      "peak_actuator_force_nm": 100,
+      "planner": "nearest-unobserved tag coverage using iterative damped-least-squares IK from measured vendor joint state",
+      "remaining_tags": [],
+      "robot_model": "Dobot CR3 vendor URDF compiled by MuJoCo with profile-owned bounded position actuators",
+      "safe_stop_applied": false,
+      "sim_duration_seconds": 3.482,
+      "simulator_engine": "MuJoCo",
+      "state_authority": "MuJoCo Link6 body pose, vendor-joint qpos, actuator force, contacts, and finite dynamic state",
+      "status": "success",
+      "success": true,
+      "task": "inspect_three_tags",
+      "unexpected_contact_observed": false,
+      "viewer_enabled": true,
+      "viewer_final_hold_seconds": 3,
+      "viewer_start_hold_seconds": 10,
+      "viewer_target_hold_seconds": 2
+    },
+    "robot_id": "dobot-cr3-sim-01",
+    "settled": true,
+    "settlement": {
+      "network": "eip155:84532",
+      "payer": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+      "payment_response": "eyJzdWNjZXNzIjp0cnVlLCJwYXllciI6IjB4MzlhMzE1NjY3ZDU1N0IxNDI1YmIxZTVEMzcxREQ2NmQzMDBjOThjMSIsInRyYW5zYWN0aW9uIjoiMHgyYWMwOTIyZmRhNDEzMGZlMWFjNjc4MzRlMDM4Yzg0MTA0MjIwYjcyOWRmNGFjMmM5NWQzMWZlMTYwNmEyYmFhIiwibmV0d29yayI6ImVpcDE1NTo4NDUzMiJ9",
+      "transaction": "0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa"
+    },
+    "skill_id": "inspect_three_tags",
+    "state": "succeeded",
+    "updated_at": "2026-08-15T10:01:51-03:00"
+  },
+  "transaction_hash": "0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa",
+  "basescan_url": "https://sepolia.basescan.org/tx/0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa"
+}
+

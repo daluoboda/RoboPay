@@ -25,9 +25,29 @@ The mandatory automated validation covers:
 - real MuJoCo CR3 inspection plus a real in-process Zenoh action/result path;
 - real Webots/MuJoCo Sim-to-Sim validation of the identical three-tag course.
 
-The repository does not represent live Base Sepolia proof or an operator
-recording as captured. Those remain trusted-run evidence requirements in
-[`evidence-manifest.yaml`](evidence/evidence-manifest.yaml).
+## Current-HEAD live and visual evidence (2026-08-15)
+
+The continuous split-screen recording linked from
+[`evidence-manifest.yaml`](evidence/evidence-manifest.yaml) executes source
+commit `39c1814edfe938c148b3fc59fd8ce593fb50dbe1`. It keeps the terminal and CR3
+MuJoCo viewer simultaneously visible for action
+`dobot-cr3-inspection-1786798884`: unpaid HTTP 402 precedes actuation, the
+first paid request returns HTTP 202, the measured tool visits violet, amber and
+cyan tags, and the viewer closes automatically after the documented final
+hold. The same continuous recording then shows the correlated successful
+result, settlement only after success, and the matching BaseScan transaction
+`0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa`.
+
+The corresponding trusted machine-readable result is versioned at
+[`base_sepolia_result_1786798911.json`](evidence/base_sepolia_result_1786798911.json).
+Its commit, action ID, transaction hash, JSON SHA-256 and recording SHA-256 are
+bound in the evidence manifest.
+
+The pre-registration visual runner uses a local HTTP/WebSocket proxy only to
+expose the real Go Tunnel. The proxy does not verify or settle payments,
+fabricate ActionEvents/results, or simulate the robot; payment remains in the
+real Tunnel/public-facilitator path and execution crosses real Zenoh into the
+measured MuJoCo bridge.
 
 The local reproducible commands are in the [profile README](../README.md).
 
