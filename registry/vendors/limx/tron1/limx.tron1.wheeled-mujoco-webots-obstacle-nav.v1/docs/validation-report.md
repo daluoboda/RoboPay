@@ -44,6 +44,24 @@ USDC on Base Sepolia.
   calls. Injected simulator failure and timeout remain unsettled; replay causes
   no second dispatch.
 
+## Current-HEAD operator evidence (2026-08-15)
+
+The continuous split-screen recording attached in
+`docs/evidence/evidence-manifest.yaml` executes source commit
+`44c34c15a6e71147e94c8ad516e41c884c0d0d99`. It shows the full TRON 1 course
+and terminal from the initial state through the final goal: unpaid HTTP 402
+without movement, the first paid HTTP 202 for action
+`limx-tron1-navigation-1786795582`, all 10 waypoints and three physical
+obstacles, the correlated successful result, settlement only after success,
+and the matching BaseScan transaction. The trusted machine-readable result is
+versioned at `docs/evidence/base_sepolia_result_1786795630.json`.
+
+For this pre-registration profile, the visual runner uses a local HTTP/WebSocket
+proxy only to expose the real Go Tunnel. The proxy does not verify or settle
+payments, fabricate action/result events, or simulate the robot. The payment
+gate and settlement remain in the real Tunnel/public facilitator path, and the
+action crosses real Zenoh into the official-policy MuJoCo bridge.
+
 ## Commands
 
 ```powershell

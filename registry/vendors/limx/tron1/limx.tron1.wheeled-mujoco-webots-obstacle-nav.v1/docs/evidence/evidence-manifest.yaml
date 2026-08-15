@@ -16,13 +16,44 @@ evidence:
       bounded Supervisor chassis velocity; zero translation/rotation writes;
       no built-in demo motion; no animation or trajectory replay; not claimed
       as ONNX or actuator-level equivalence
-  - artifact: artifacts/base_sepolia_result_<timestamp>.json
-    generatedBy: bridge/run_live_base_sepolia_e2e.py --ci
-    proves: unpaid 402, first paid action, terminal simulator success and Base Sepolia settlement transaction
+  - artifact: docs/evidence/base_sepolia_result_1786795630.json
+    generatedBy: bridge/run_live_base_sepolia_e2e.py
+    validationLevel: live-paid-action
+    status: captured-and-verified
+    sourceCommit: 44c34c15a6e71147e94c8ad516e41c884c0d0d99
+    actionId: limx-tron1-navigation-1786795582
+    transactionHash: "0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde"
+    basescanUrl: https://sepolia.basescan.org/tx/0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde
+    proves: >-
+      unpaid HTTP 402 without actuation, first paid HTTP 202, correlated
+      ten-waypoint/three-obstacle terminal simulator success, and settlement
+      only after success on Base Sepolia
   - artifact: GitHub Actions tunnel-and-contract logs
     generatedBy: tests/test_x402_invalid_payment_gate.py
     proves: isValid false blocks before publication; failure/timeout/replay have zero settlement or repeat dispatch
   - artifact: operator visual recording
     generatedBy: run-live-base-sepolia-visual.ps1
-    proves: visible real Tunnel, x402 payment, actuator-level MuJoCo motion, terminal result and settlement
-    status: pending-operator-recording
+    validationLevel: continuous-operator-recording
+    status: captured-and-verified
+    attachment: https://github.com/user-attachments/assets/dea3e39d-4718-460f-b97f-cfd4cc3340a9
+    sourceCommit: 44c34c15a6e71147e94c8ad516e41c884c0d0d99
+    actionId: limx-tron1-navigation-1786795582
+    transactionHash: "0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde"
+    recordingSha256: 25a7726d9463c01dde7932f51e79658508847df9eef64fe00e30f0e1811b6509
+    recordingBytes: 6739412
+    recordingDurationSeconds: 118.87
+    recordingResolution: 1280x720
+    trustedJsonArtifact: docs/evidence/base_sepolia_result_1786795630.json
+    trustedJsonSha256: 0fc8534c2f84ee2bf801816a2458a88c84b3106a6e7a5b4d9b91cbc82bc14994
+    proves: >-
+      one continuous split-screen sequence with the full MuJoCo course and
+      terminal visible: unpaid HTTP 402 with no movement, first paid HTTP 202
+      and action ID, all ten waypoints and three obstacles, the correlated
+      successful result, post-success settlement, and the matching BaseScan
+      transaction
+    networkBoundary: >-
+      the local HTTP/WebSocket proxy only exposes the real Go Tunnel before
+      hosted Gateway profile registration; it does not verify or settle
+      payments, publish fabricated results, or simulate motion. The run uses
+      the real Tunnel x402 middleware, public facilitator, Zenoh bridge,
+      official-policy MuJoCo episode and Base Sepolia settlement.

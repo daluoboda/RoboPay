@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-08-15T12:07:10Z",
+  "source_commit": "44c34c15a6e71147e94c8ad516e41c884c0d0d99",
+  "network": "eip155:84532",
+  "payer": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+  "payee": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+  "robot_id": "limx-tron1-wf-sim-01",
+  "action_id": "limx-tron1-navigation-1786795582",
+  "unpaid_http_status": 402,
+  "paid_http_status": 202,
+  "visual_start_hold_seconds": 6.0,
+  "visual_final_hold_seconds": 3.0,
+  "terminal_status": {
+    "action_id": "limx-tron1-navigation-1786795582",
+    "idempotency_key": "limx-tron1-navigation-1786795582",
+    "params_hash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "result": {
+      "collision": false,
+      "detected_obstacles": [
+        "amber_gate",
+        "cyan_gate",
+        "violet_gate"
+      ],
+      "final_base_pose": {
+        "pitch": 0.0898,
+        "roll": -0.0115,
+        "x": 5.3617,
+        "y": -0.0268,
+        "yaw": 0.1173,
+        "z": 0.7617
+      },
+      "goal_distance_m": 0.2398,
+      "low_level_controller": "limx-isaacgym-onnx-policy",
+      "max_tilt_rad": 0.1769,
+      "minimum_clearance_m": 0.2016,
+      "model_variant": "WF_TRON1A",
+      "path_length_m": 5.8462,
+      "simulator": "mujoco",
+      "skill": "navigate_obstacle_course",
+      "success": true,
+      "terminal_reason": "goal_reached",
+      "waypoints_completed": 10,
+      "waypoints_total": 10
+    },
+    "robot_id": "limx-tron1-wf-sim-01",
+    "settled": true,
+    "settlement": {
+      "network": "eip155:84532",
+      "payer": "0x39a315667d557B1425bb1e5D371DD66d300c98c1",
+      "payment_response": "eyJzdWNjZXNzIjp0cnVlLCJwYXllciI6IjB4MzlhMzE1NjY3ZDU1N0IxNDI1YmIxZTVEMzcxREQ2NmQzMDBjOThjMSIsInRyYW5zYWN0aW9uIjoiMHg0ZTgwNDY5Zjk0YWRlNmFkN2MyOGEyMGIyNzNhMjlkMDNlZWQyZTEzYjQ0MjlmY2RjMWI3MmRkMzYwMzgzZmRlIiwibmV0d29yayI6ImVpcDE1NTo4NDUzMiJ9",
+      "transaction": "0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde"
+    },
+    "skill_id": "navigate_obstacle_course",
+    "state": "succeeded",
+    "updated_at": "2026-08-15T09:07:12-03:00"
+  },
+  "transaction_hash": "0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde",
+  "basescan_url": "https://sepolia.basescan.org/tx/0x4e80469f94ade6ad7c28a20b273a29d03eed2e13b4429fcdc1b72dd360383fde"
+}
