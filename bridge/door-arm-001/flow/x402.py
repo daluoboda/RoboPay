@@ -134,6 +134,17 @@ class X402Verifier:
             raise X402Error("replay detected: this txHash was already used")
         self.seen.add(key)
 
+        # 3b) Expiry: an explicit expiresAt in the past is rejected so a
+        #     captured receipt cannot be replayed after its validity window.
+        exp = payment.get("expiresAt")
+        if exp is not None:
+            try:
+                exp_ts = float(exp)
+            except (TypeError, ValueError):
+                raise X402Error("expiresAt must be a unix timestamp")
+            if time.time() > exp_ts:
+                raise X402Error("payment receipt expired")
+
         # 4) Optional live facilitator call; degrade honestly if offline.
         #    Off by default so CI/tests are deterministic; enabled explicitly
         #    for the demo evidence run.
@@ -157,6 +168,7 @@ class X402Verifier:
 
         receipt = {
             "verified": True,
+            "expiresAt": exp,
             "verification": verification,
             "scheme": "exact",
             "network": challenge.network,
