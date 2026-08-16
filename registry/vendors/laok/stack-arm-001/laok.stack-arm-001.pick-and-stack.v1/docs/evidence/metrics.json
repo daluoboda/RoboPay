@@ -90,7 +90,8 @@
   "summary": {
     "all_core_metrics_pass": true,
     "real_onchain_txs": 3,
-    "ci_gated_dynamic_sim2sim": true,
+    "dynamic_sim2sim_status": "NOT_APPLICABLE",
+    "dynamic_sim2sim_real_run": false,
     "bridge_unit_test_present": true
   }
 }
