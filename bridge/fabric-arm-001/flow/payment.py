@@ -34,16 +34,35 @@ def verify_payment(payment: dict | None) -> dict:
     return X402Verifier().verify(payment)
 
 
-class SettlementLedger:
-    """Local stand-in for on-chain settlement (D7 swaps for real facilitator)."""
+class SettlementAuditLog:
+    """In-process AUDIT LOG -- NOT on-chain settlement.
+
+    This records the relay's settle/skip *decisions* for the D1 demo and the
+    in-process ``LoopbackTransport`` path. It is deliberately NOT the production
+    payment boundary: real USDC settlement is performed exclusively by the
+    shared RoboPay Go ``tunnel/`` binary (its x402 facilitator), which the
+    production bridge (``bridge.FabricZenohBridge``) defers to. See
+    tests/test_payment_gate.py, tests/test_x402_no_settlement.py and
+    tests/test_bridge_executes.py for the real, on-chain-verifiable boundary.
+
+    ``mode`` documents that an entry here is an audit record, never a chain tx.
+    """
+
+    mode = "protocol-audit-local-relay"
 
     def __init__(self):
-        self.settled = {}  # action_id -> payment
+        # action_id -> payment (audit record only; no chain side effect)
+        self.settled = {}
 
     def settle(self, action_id: str, payment: dict) -> dict:
         self.settled[action_id] = payment
-        return {"settled": True, "actionId": action_id}
+        return {"settled": True, "actionId": action_id, "mode": self.mode}
 
     def skip(self, action_id: str) -> dict:
         # Failure path: payment MUST NOT be settled.
-        return {"settled": False, "actionId": action_id, "reason": "execution_failed"}
+        return {"settled": False, "actionId": action_id,
+                "reason": "execution_failed", "mode": self.mode}
+
+
+# Backwards-compatible alias so existing imports keep working.
+SettlementLedger = SettlementAuditLog
