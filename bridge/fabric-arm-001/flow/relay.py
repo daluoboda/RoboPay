@@ -1,6 +1,16 @@
-"""RoboPay bridge relay (payment gateway + transport client).
+"""RoboPay bridge relay (D1 in-process payment gateway + transport client).
 
 Orchestrates: request -> payment verify -> transport(action) -> result -> settle/no-settle.
+
+PRODUCTION PAYMENT BOUNDARY IS THE GO TUNNEL, NOT THIS FILE.
+This ``Relay`` is the legacy D1 path used by ``flow.demo`` and the loopback
+tests. It records settle/skip *decisions* in an in-process audit log
+(``flow.payment.SettlementAuditLog``) and never touches a chain. The real
+x402 payment gate AND USDC settlement are enforced by the shared RoboPay Go
+``tunnel/`` binary, which the production bridge (``bridge.FabricZenohBridge``)
+defers to -- see tests/test_payment_gate.py, tests/test_x402_no_settlement.py
+and tests/test_bridge_executes.py. Treat any ``settled: True`` from this relay
+as an audit record, verified on-chain only via the Tunnel's facilitator.
 
 The transport is the swappable seam: real Zenoh in production, Loopback/Local
 in tests. Payment + idempotency + settlement logic is independent of the
@@ -122,5 +132,9 @@ class Relay:
             # measured contact force, stage reached, engine used.
             "metrics": result.get("metrics") or {},
             "paymentState": state.value,
+            # Audit record only. On-chain settlement is performed by the RoboPay
+            # Tunnel facilitator (see bridge.FabricZenohBridge); this relay's
+            # ledger is a local decision log, never a chain tx.
             "settled": env.action_id in self.ledger.settled,
+            "verification": self.ledger.mode,
         }
