@@ -1,0 +1,19 @@
+{
+  "skill": "push_box",
+  "description": "Translate the floor box to the target zone by sustained gripper contact (no lift). Real MuJoCo physics; failure (unreachable/collision/timeout/offtarget) never settles.",
+  "price": "$0.10",
+  "parameters": {
+    "object": {
+      "type": "string",
+      "enum": ["pushable", "unreachable", "collision", "timeout", "far_box", "blocked_box", "slow_box"],
+      "default": "pushable",
+      "description": "Physical scene. 'pushable' is the success path; the others are real failure modes."
+    },
+    "maxSteps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "description": "Hard step budget for the execution trajectory."
+    }
+  }
+}
