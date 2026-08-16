@@ -128,7 +128,12 @@ def run_once(relay: Relay, executor_probe, obj: str, verbose: bool = True,
         print(dump(result))
 
     if verbose:
-        verdict = "SETTLED" if result.get("settled") else "NOT SETTLED"
+        # Honest label: this in-process relay records an AUDIT entry only.
+        # Real on-chain settlement is performed by the RoboPay Tunnel
+        # facilitator (see bridge.FabricZenohBridge); the live PR proves it via
+        # tests/test_bridge_executes.py against the real Go binary.
+        verdict = ("SETTLED (local audit ledger)" if result.get("settled")
+                   else "NOT SETTLED")
         step(9, f"payment {result.get('paymentState')} -> {verdict}")
         step(10, "replay the same idempotencyKey")
         replay = relay.handle({**request, "payment": receipt})
