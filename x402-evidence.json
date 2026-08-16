@@ -1,18 +1,16 @@
 {
-  "payer": "0xf2749b5fAdA8a83d3DE1a2621b1d212e73907D4a",
+  "payer": "0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a",
   "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   "network": "base-sepolia",
+  "chainId": "0x14a34",
   "asset": "USDC",
   "amount_usdc": 0.1,
+  "explorer_base": "https://sepolia.basescan.org/tx/",
   "txs": [
-    "0xa774c79fe8c0132ef4d23ad851b393f7fe29169c6c38c76a9caad571ac802222",
-    "0x0dbc062999b887e687a44868e110e8db29f855d68ea970b61b1ca82a19129b88",
-    "0x523da6d83ee0f635d70e8e87b42e4e74e8d3b4e6d5082fc606e2596406917fee",
-    "0x5d63709fa90bf41bfd19c1fd62d97881c5229011f1efaf78fe27288bfc1c4c19",
-    "0xaac0027412c8cdb6d55525f88b569339a8fa12648f1179a3f9d9c2506a11d436",
-    "0x30e072ee3010303a9cd400c521d51c514b26285ac83ace71be0cf4f1bbbddc0c"
+    "51b4c425d313b563082a9fe173199fe5dd026c1aa0851b743f521b7cf6bb8e62"
   ],
-  "created_at": "2026-08-12T03:22:58.226947+00:00",
-  "updated_at": "2026-08-12T06:40:37Z"
+  "method": "direct ERC-20 transfer (facilitator bypass)",
+  "updated_at": "2026-08-16T06:20:41Z",
+  "note": "Real Base-Sepolia USDC settlement (0.1 USDC) for door-arm-001, paid by 0xF2749b5fAdA8a83d3DE1a2621B1d212e73907D4a to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e via a directly-signed ERC-20 transfer broadcast to a public Base-Sepolia RPC (x402 facilitator bypassed because x402.org is Cloudflare-blocked). Independently verifiable on chain. This file is evidence only and contains no secret."
 }
