@@ -1,0 +1,7 @@
+{
+  "action": "stop",
+  "robot_id": "dobot-cr3-sim-01",
+  "action_id": "dobot-cr3-stop-example-001",
+  "idempotency_key": "dobot-cr3-stop-example-001",
+  "params": {}
+}

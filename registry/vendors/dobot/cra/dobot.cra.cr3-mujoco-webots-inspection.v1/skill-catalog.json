@@ -1,0 +1,16 @@
+[
+  {
+    "skill_id": "inspect_three_tags",
+    "description": "Inspect three physically rendered workcell tags with measured CR3 Link6 pose and online bounded IK.",
+    "payment_required": true,
+    "price_usdc": "0.001",
+    "params": {}
+  },
+  {
+    "skill_id": "stop",
+    "description": "Safely stop the active Dobot CR3 simulator action.",
+    "payment_required": true,
+    "price_usdc": "0.001",
+    "params": {}
+  }
+]

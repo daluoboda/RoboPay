@@ -1,0 +1,56 @@
+schemaVersion: robopay-evidence.v1
+profileId: dobot.cra.cr3-mujoco-webots-inspection.v1
+generatedArtifacts:
+  - path: artifacts/sim2sim_result.json
+    command: py -3 bridge/run_sim2sim_validation.py
+    claim: Real MuJoCo and Webots independently execute the canonical three-tag task.
+    requiredFields: [success, acceptance_checks, mujoco.observed_tags, webots.observed_tags]
+testEvidence:
+  - artifact: pytest-managed temporary replay.sqlite3
+    command: pytest -q tests/test_bridge_contract.py
+    claim: Durable payment-bound idempotency survives a fresh execution boundary in an isolated temporary store.
+    runtimeDefaultPath: artifacts/state/dobot_cr3_replay.sqlite3
+externalEvidenceRequiredBeforeLiveClaim:
+  - artifact: docs/evidence/base_sepolia_result_1786798911.json
+    evidenceType: Base Sepolia x402 receipt and correlated Tunnel status result
+    prerequisite: Hardened correlated-post-verification-action-event.v1 Tunnel deployment
+    runbook: run-live-base-sepolia-visual.ps1 -OpenBaseScan; the launcher reads credentials only from its process environment.
+    status: captured-and-verified
+    capturedAt: "2026-08-15T13:01:51Z"
+    sourceCommit: 39c1814edfe938c148b3fc59fd8ce593fb50dbe1
+    actionId: dobot-cr3-inspection-1786798884
+    unpaidHttpStatus: 402
+    paidHttpStatus: 202
+    completionReason: all_three_tags_observed
+    observedTags: [violet_tag, amber_tag, cyan_tag]
+    settled: true
+    transactionHash: "0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa"
+    basescanUrl: https://sepolia.basescan.org/tx/0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa
+    trustedJsonSha256: 2219c990e3f6a9820e123ab5a71958cc57769b10175824b777a458cdf8e05eba
+  - artifact: Continuous CR3 MuJoCo operator recording
+    command: run-live-base-sepolia-visual.ps1 -OpenBaseScan
+    status: captured-and-verified
+    attachmentUrl: https://github.com/user-attachments/assets/becb6f1f-e936-440b-ae8d-f55a7a05aedc
+    sourceCommit: 39c1814edfe938c148b3fc59fd8ce593fb50dbe1
+    actionId: dobot-cr3-inspection-1786798884
+    transactionHash: "0x2ac0922fda4130fe1ac67834e038c84104220b729df4ac2c95d31fe1606a2baa"
+    recordingSha256: beab13addbd5c5073fde2585ea6279d34aaa0c02fa60e67acee4f60528ac50cf
+    recordingBytes: 3088452
+    recordingDurationSeconds: 59.067
+    recordingResolution: 1280x720
+    trustedJsonArtifact: docs/evidence/base_sepolia_result_1786798911.json
+    proves: >-
+      one continuous split-screen sequence with an exact commit, unpaid HTTP
+      402 before actuation, first paid HTTP 202 and action ID, all three visible
+      tag visits in MuJoCo, the correlated successful result, post-success
+      settlement, and the matching BaseScan transaction
+    networkBoundary: >-
+      the local HTTP/WebSocket proxy only exposes the real Go Tunnel before
+      hosted Gateway profile registration; it does not verify or settle
+      payments, fabricate ActionEvents/results, or simulate motion. The run
+      uses the real Tunnel x402 middleware, public facilitator, Zenoh bridge,
+      measured MuJoCo episode and Base Sepolia settlement.
+provenance:
+  vendorSource: https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4
+  vendorCommit: 0f67ed938c0cec4ed0808af759ddbb608e573dbe
+  vendorUrdfSha256: 66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3

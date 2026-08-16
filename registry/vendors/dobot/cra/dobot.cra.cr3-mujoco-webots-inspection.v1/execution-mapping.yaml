@@ -1,0 +1,27 @@
+schemaVersion: execution-mapping.v1
+profileId: dobot.cra.cr3-mujoco-webots-inspection.v1
+model:
+  source: https://github.com/Dobot-Arm/DOBOT_6Axis_ROS2_V4
+  commit: 0f67ed938c0cec4ed0808af759ddbb608e573dbe
+  urdf: vendor/DOBOT_6Axis_ROS2_V4/cr3_robot.urdf
+  urdfSha256: 66df5ef6e26abf365fcf2e9cc2c87469329147283ca8757fa7d645bbe779c7e3
+  mujoco: MuJoCo compiles the pinned vendor URDF with a documented, bounded profile-owned actuator overlay.
+  webots: urdf2webots converts the same pinned vendor URDF at run time for Webots R2025a.
+skills:
+  inspect_three_tags:
+    task: three_tag_tool_center_inspection
+    output: >-
+      MuJoCo episode and a Webots R2025a episode independently execute the
+      same CR3-base-frame, three-tag task and emit measured result JSON.
+    policy: >-
+      dobot-cr3-three-tag-tool-center-inspection-v1. The next unobserved
+      tag is selected from measured Link6/tool-center pose. Iterative bounded
+      damped-least-squares IK computes a new joint target from vendor joint
+      state; it never writes qpos or replays a prerecorded trajectory.
+    inputs: []
+    metrics: [observed_tags, measured_target_error_m, minimum_tool_height_m, finite_state, unexpected_contact_observed]
+    success: all three measured tag errors are <= 0.045 m for eight samples with safe finite simulator state
+  stop:
+    task: safe_stop
+    output: terminal correlated safe-stop result
+    success: safe stop confirmed without selecting or commanding another target

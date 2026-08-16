@@ -1,0 +1,7 @@
+{
+  "action": "inspect_three_tags",
+  "robot_id": "dobot-cr3-sim-01",
+  "action_id": "dobot-cr3-inspection-example-001",
+  "idempotency_key": "dobot-cr3-inspection-example-001",
+  "params": {}
+}

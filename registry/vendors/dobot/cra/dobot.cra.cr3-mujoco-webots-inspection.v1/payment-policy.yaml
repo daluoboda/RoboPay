@@ -1,0 +1,27 @@
+schemaVersion: payment-policy.v1
+profileId: dobot.cra.cr3-mujoco-webots-inspection.v1
+provider: x402
+network: eip155:84532
+asset:
+  symbol: USDC
+  address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+  decimals: 6
+payTo: "<configure ROBOT_PAYEE_ADDRESS in the Tunnel deployment>"
+policies:
+  - skillId: inspect_three_tags
+    required: true
+    priceUSDC: "0.001"
+    paymentHeader: PAYMENT-SIGNATURE
+  - skillId: stop
+    required: true
+    priceUSDC: "0.001"
+    paymentHeader: PAYMENT-SIGNATURE
+settlement:
+  facilitator: https://x402.org/facilitator
+  scheme: exact
+  settleOnStatus: success
+  rule: >-
+    Tunnel verifies the payment before it publishes the private correlated
+    ActionEvent. It settles only after the same action_id receives a success
+    result. Invalid/unverified input, rejected actions, simulator failures,
+    timeouts, and durable replays remain unsettled.

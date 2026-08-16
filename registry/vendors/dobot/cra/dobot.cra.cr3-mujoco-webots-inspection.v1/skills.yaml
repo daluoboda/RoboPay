@@ -1,0 +1,21 @@
+schemaVersion: robot-skills.v1
+profileId: dobot.cra.cr3-mujoco-webots-inspection.v1
+skills:
+  - skillId: inspect_three_tags
+    description: >-
+      Use bounded online damped-least-squares Cartesian planning from measured
+      CR3 joint state to inspect three fixed, physically rendered tags in the
+      simulator workcell. The next target is selected from current measured
+      tool pose; no recorded joint trajectory is replayed.
+    parameters: {}
+    terminalState:
+      success: >-
+        MuJoCo or Webots measured Link6/tool-center pose remains finite and
+        safely above the workcell, without unexpected contacts, and reaches
+        each amber, cyan, and violet tag within 0.045 m for eight samples.
+      failure: [inspection_timeout, unsafe_tool_height, nonfinite_simulator_state, simulator_execution_error, safe_stopped]
+  - skillId: stop
+    description: Safely halt a CR3 simulator action and report a correlated terminal safe-stop result.
+    parameters: {}
+    terminalState:
+      success: Safe stop is confirmed with zero new motion command.
