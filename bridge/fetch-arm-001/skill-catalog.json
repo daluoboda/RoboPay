@@ -1,0 +1,19 @@
+{
+  "skill": "fetch_object",
+  "description": "Pick the floor box and deliver it to the handover point. Real MuJoCo physics; failure (unreachable/collision/timeout/drop) never settles.",
+  "price": "$0.10",
+  "parameters": {
+    "object": {
+      "type": "string",
+      "enum": ["fetchable", "unreachable", "collision", "timeout", "far_box", "blocked_box", "slow_box"],
+      "default": "fetchable",
+      "description": "Physical scene. 'fetchable' is the success path; the others are real failure modes."
+    },
+    "maxSteps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "description": "Hard step budget for the execution trajectory."
+    }
+  }
+}
