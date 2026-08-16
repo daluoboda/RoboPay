@@ -1,0 +1,19 @@
+{
+  "skill": "sort_object",
+  "description": "Pick the floor box and place it into the target sorting bin. Real MuJoCo physics; failure (unreachable/collision/timeout/misplace) never settles.",
+  "price": "$0.10",
+  "parameters": {
+    "object": {
+      "type": "string",
+      "enum": ["sortable", "unreachable", "collision", "timeout", "far_box", "blocked_box", "slow_box"],
+      "default": "sortable",
+      "description": "Physical scene. 'sortable' is the success path; the others are real failure modes."
+    },
+    "maxSteps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "description": "Hard step budget for the execution trajectory."
+    }
+  }
+}
