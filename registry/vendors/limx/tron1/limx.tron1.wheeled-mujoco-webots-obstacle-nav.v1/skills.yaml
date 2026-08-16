@@ -1,0 +1,30 @@
+schemaVersion: robot-skills.v1
+profileId: limx.tron1.wheeled-mujoco-webots-obstacle-nav.v1
+skills:
+  - skillId: navigate_obstacle_course
+    description: >-
+      Navigate the fixed three-obstacle course from measured simulator state.
+      MuJoCo uses LimX's pinned WF_TRON1A ONNX locomotion policy. Webots uses a
+      bounded task-level chassis-velocity adapter on the converted official
+      model; both run the same online planner, route and terminal contract.
+      Neither simulator uses a built-in demo motion or trajectory replay.
+    params: {}
+    paymentRequired: true
+    priceUSDC: "0.001"
+    movementLimits:
+      maxDurationSec: 70
+      maxLinearVelocityMps: 0.65
+      maxYawRateRadPerSec: 0.5
+    terminalState:
+      success: >-
+        All ten waypoints and the goal are reached, all three obstacles are
+        detected, the official model remains finite and upright, and no
+        obstacle contact occurs.
+      failure: [course_timeout, collision, unsafe_base_state, non_finite_state, simulator_execution_error]
+  - skillId: stop
+    description: Safely retain zero velocity and publish a correlated terminal result.
+    params: {}
+    paymentRequired: true
+    priceUSDC: "0.001"
+    terminalState:
+      success: Safe stop confirmed without starting navigation.
