@@ -81,4 +81,4 @@ jobs:
           assert r.success, r.reason
           PY
       - name: Verify x402 settlement tx hashes on Base Sepolia
-        run: timeout 120 python "$GITHUB_WORKSPACE/verify_settlement.py"
+        run: timeout 120 python "$GITHUB_WORKSPACE/door/verify_settlement.py"
