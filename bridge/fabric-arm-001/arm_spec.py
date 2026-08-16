@@ -169,12 +169,17 @@ class BudgetExhausted(Exception):
 
 def build_metrics(*, engine, obj, scene_key, stage, grasp_state,
                   start_pos, end_pos, hold_force, peak_force, contact_samples,
-                  collisions, steps, budget, wall_time, note) -> dict:
-    """Identical metric schema for every backend."""
+                  collisions, steps, budget, wall_time, note,
+                  robotId="fabric-arm-001", skillId="pick_object") -> dict:
+    """Identical metric schema for every backend.
+
+    `robotId`/`skillId` are optional so the shared spec can be reused across
+    arms (fabric/sort/push/fetch/stack) without forking the metrics schema.
+    """
     delta = [round(end_pos[i] - start_pos[i], 4) + 0.0 for i in range(3)]
     return {
-        "robotId": "fabric-arm-001",
-        "skillId": "pick_object",
+        "robotId": robotId,
+        "skillId": skillId,
         "engine": engine,
         "object": obj,
         "scene": scene_key,
