@@ -11,8 +11,8 @@
   "environment": {
     "python": "3.13.14",
     "mujoco": "3.11.0",
-    "pybullet": "real (VPS Linux)",
-    "host": "104.168.103.106 (Linux)"
+    "pybullet": "stub-only (real wheel not installable on Windows; dynamic layer CI-gated)",
+    "host": "windows (dynamic cross-engine layer CI-gated)"
   },
   "layers": {
     "static_spec_consistency": {
@@ -24,10 +24,14 @@
       "note": "PyBullet call surface + failure semantics verified (real PyBullet absent on Windows -> bullet_stub)."
     },
     "dynamic_engine_agreement": {
-      "status": "PASS",
-      "note": "Real PyBullet test run on VPS: 19 passed, 8 skipped"
+      "status": "NOT_APPLICABLE",
+      "note": "This skill ships no MuJoCo backend to compare against; dual-engine numeric agreement is not applicable."
     },
-    "runnable_layers": "dynamic_engine_agreement"
+    "runnable_layers": {
+      "passed": 18,
+      "skipped": 9,
+      "failed": 0
+    }
   },
-  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_CI_GATED"
+  "overall": "RUNNABLE_LAYERS_PASS__DYNAMIC_PENDING"
 }
