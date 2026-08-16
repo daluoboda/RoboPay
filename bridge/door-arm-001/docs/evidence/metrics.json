@@ -8,14 +8,9 @@
     "primary": {
       "network": "base-sepolia",
       "asset": "USDC",
-      "real_tx_count": 6,
+      "real_tx_count": 1,
       "txs": [
-        "0xa774c79fe8c0132ef4d23ad851b393f7fe29169c6c38c76a9caad571ac802222",
-        "0x0dbc062999b887e687a44868e110e8db29f855d68ea970b61b1ca82a19129b88",
-        "0x523da6d83ee0f635d70e8e87b42e4e74e8d3b4e6d5082fc606e2596406917fee",
-        "0x5d63709fa90bf41bfd19c1fd62d97881c5229011f1efaf78fe27288bfc1c4c19",
-        "0xaac0027412c8cdb6d55525f88b569339a8fa12648f1179a3f9d9c2506a11d436",
-        "0x30e072ee3010303a9cd400c521d51c514b26285ac83ace71be0cf4f1bbbddc0c"
+        "0xb2546bb528289e14cabf593c8ee9521e144fbfd2b62c74d807dc1c68a23f792f"
       ],
       "explorer_base": "https://sepolia.basescan.org/tx/",
       "payee": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
@@ -67,9 +62,22 @@
       "failed_tests": []
     },
     "paid_success": {
-      "status": "PASS_ONCHAIN_ONLY",
-      "note": "6 real Base-Sepolia USDC tx(s) verified",
-      "onchain_tx_count": 6
+      "status": "FAIL",
+      "note": "1 real Base-Sepolia USDC tx(s) recorded.",
+      "onchain_tx_count": 1,
+      "tests": [
+        "TestUnpaidRejected402::test_unpaid_is_402_no_execution",
+        "TestInvalidRejected::test_invalid_is_402_no_execution",
+        "TestInvalidRejected::test_malformed_txhash_rejected",
+        "TestInvalidRejected::test_wrong_amount_rejected",
+        "TestInvalidRejected::test_wrong_asset_rejected",
+        "TestExpiredRejected::test_future_expiry_still_valid",
+        "TestReplayRejected409::test_replay_of_verified_payment_is_rejected_no_double_settle",
+        "TestPaidSuccessSettle::test_valid_receipt_verifies",
+        "TestPaidSuccessSettle::test_verified_payment_executes_and_settles",
+        "TestPyBulletBackendContract::test_failure_still_blocks_settlement",
+        "TestPyBulletBackendContract::test_success_path_completes"
+      ]
     },
     "failure_no_settle": {
       "status": "FAIL",
@@ -97,8 +105,8 @@
     }
   },
   "summary": {
-    "all_core_metrics_pass": true,
-    "real_onchain_txs": 6,
+    "all_core_metrics_pass": false,
+    "real_onchain_txs": 1,
     "dynamic_sim2sim_status": "PASS",
     "dynamic_sim2sim_real_run": true,
     "bridge_unit_test_present": true
