@@ -1,7 +1,10 @@
-"""Local Fabric/x402 harness for Spot's real Go Tunnel integration tests.
+"""Local Fabric/x402 harness for fabric-arm-001's real Go Tunnel integration tests.
 
 The proxy speaks the same WebSocket envelope as Fabric, while the Tunnel
-binary, its x402 middleware and its Zenoh action handoff stay real.
+binary, its x402 middleware and its Zenoh action handoff stay real. All three
+processes (Tunnel, bridge-under-test / observer, proxy) join the same Zenoh
+network over default multicast scouting on the loopback interface, which is
+how they discover each other on a single CI host.
 """
 
 from __future__ import annotations
@@ -24,13 +27,21 @@ import zenoh
 
 
 NETWORK = "eip155:84532"
+# Test payee. The live evidence run substitutes the real payee from
+# repository secrets (ROBO_PAYEE_ADDRESS); this sentinel never receives funds.
 PAYEE = "0x0000000000000000000000000000000000000001"
 
 
 def find_tunnel_binary(root: Path) -> str | None:
     configured = os.environ.get("TUNNEL_BIN")
     candidates = [configured] if configured else []
-    candidates += [str(root / "bin" / "tunnel"), str(root / "tunnel" / "tunnel_bin")]
+    # `make build` places the binary at tunnel/bin/tunnel; also accept the
+    # repo-root bin/ and tunnel/tunnel_bin locations used by some setups.
+    candidates += [
+        str(root / "tunnel" / "bin" / "tunnel"),
+        str(root / "bin" / "tunnel"),
+        str(root / "tunnel" / "tunnel_bin"),
+    ]
     for candidate in candidates:
         if not candidate:
             continue
@@ -105,7 +116,6 @@ class _TunnelConnection:
                 return response
 
     def _read_message(self) -> tuple[int, bytes]:
-        """Read one complete WebSocket message, including continuation frames."""
         message_opcode: int | None = None
         chunks: list[bytes] = []
         while True:
@@ -129,7 +139,6 @@ class _TunnelConnection:
                     )
             else:
                 continue
-
             chunks.append(raw)
             if final:
                 return message_opcode, b"".join(chunks)
@@ -143,15 +152,13 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         if clean_path == "/ws":
             self._handle_websocket()
             return
-        if clean_path.endswith("/skills"):
-            self._forward_to_tunnel("GET", "/skills", b"")
+        # Forward GET /action/<id>/status (the Tunnel's terminal-state poll
+        # endpoint) to the connected Tunnel, stripping the /robots/<id> prefix.
+        if "/action/" in clean_path:
+            marker = clean_path.find("/action/")
+            self._forward_to_tunnel("GET", clean_path[marker:], b"")
             return
-        if clean_path.startswith("/robots/") and clean_path.count("/") == 2:
-            self._forward_to_tunnel("GET", "/robot", b"")
-            return
-        if "/action/" in clean_path and clean_path.endswith("/status"):
-            self._forward_to_tunnel("GET", clean_path[clean_path.index("/action/") :], b"")
-            return
+        # Our Tunnel only serves POST /action and GET /action/<id>/status.
         self.send_error(404)
 
     def _handle_websocket(self) -> None:
@@ -308,7 +315,7 @@ class FacilitatorHandler(http.server.BaseHTTPRequestHandler):
             self._write_json(
                 {
                     "success": True,
-                    "transaction": "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2",
+                    "transaction": "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e",
                     "network": NETWORK,
                     "payer": "0x1111111111111111111111111111111111111111",
                 }
@@ -345,15 +352,120 @@ def start_facilitator(verify_response: dict | None = None):
     return server, thread
 
 
+def launch_tunnel(
+    root: Path,
+    robot_id: str,
+    proxy,
+    facilitator,
+    skill_catalog_path: Path,
+    temp_dir: Path,
+    extra_env: dict | None = None,
+    price: str = "$0.10",
+    execution_timeout: int = 5,
+) -> subprocess.Popen:
+    """Start the real Go Tunnel binary with the fail-closed allowlist configured.
+
+    The shared Tunnel refuses every paid action unless SKILL_CATALOG_PATH and
+    ALLOWED_ACTIONS are set, so a success / failure / replay flow cannot be
+    exercised without them. EXECUTION_TIMEOUT_SECONDS controls how long the
+    execute-gated watcher waits for a correlated result before recording a
+    timeout (low for the no-settlement tests, higher for the real MuJoCo e2e).
+    """
+    config_path = Path(temp_dir) / "tunnel.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "robot_id": robot_id,
+                "evm_payee_address": PAYEE,
+                "price": price,
+                "network": NETWORK,
+            }
+        ),
+        encoding="utf-8",
+    )
+    child_env = os.environ.copy()
+    child_env.update(
+        {
+            "PROXY_WS_URL": f"ws://127.0.0.1:{proxy.port}/ws",
+            "FACILITATOR_URL": f"http://127.0.0.1:{facilitator.server_address[1]}",
+            "AIP_ENABLED": "false",
+            "SKILL_CATALOG_PATH": str(skill_catalog_path),
+            "ALLOWED_ACTIONS": "pick_object",
+            "MAX_ACTION_DURATION_SECONDS": "60",
+            "EXECUTION_TIMEOUT_SECONDS": str(execution_timeout),
+            "IDEMPOTENCY_STORE_PATH": str(Path(temp_dir) / "robopay_idempotency.json"),
+        }
+    )
+    if extra_env:
+        child_env.update(extra_env)
+    binary = find_tunnel_binary(root)
+    if not binary:
+        raise unittest.SkipTest("Build the real Tunnel first with make build")
+    proc = subprocess.Popen(
+        [binary, "--config", str(config_path)],
+        cwd=root,
+        env=child_env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    if proxy.wait_for_connection(15) is None:
+        proc.terminate()
+        raise AssertionError("real Tunnel did not connect to the local Fabric proxy")
+    return proc
+
+
+class InjectedFabricSimulator:
+    """Subscribes to robot/tunnel/action and echoes a terminal result.
+
+    Used by the no-settlement tests: it publishes a failure (or success) result
+    carrying the exact correlation tuple the Tunnel issued, so the Tunnel's
+    execute-gated watcher matches it and records the terminal outcome. With
+    ``status="failure"`` the Tunnel must NOT settle; with no simulator at all the
+    Tunnel times out and must NOT settle.
+    """
+
+    def __init__(
+        self,
+        status: str = "failure",
+        error_code: str = "SIMULATOR_EXECUTION_FAILED",
+        robot_id: str = "fabric-arm-001",
+        action_topic: str = "robot/tunnel/action",
+        result_topic: str = "robot/tunnel/result",
+    ):
+        self.session = zenoh.open(zenoh.Config())
+        self.status = status
+        self.error_code = error_code
+        self.robot_id = robot_id
+        self.action_topic = action_topic
+        self.result_topic = result_topic
+        self.subscriber = self.session.declare_subscriber(action_topic, self._on_action)
+
+    def _on_action(self, sample) -> None:
+        event = json.loads(bytes(sample.payload.to_bytes()))
+        payload = event.get("payload") or {}
+        result = {
+            "action_id": event.get("action_id"),
+            "robot_id": event.get("robot_id") or self.robot_id,
+            "skill_id": event.get("skill_id") or (payload.get("action") or ""),
+            "params_hash": event.get("params_hash"),
+            "idempotency_key": event.get("idempotency_key"),
+            "status": self.status,
+            "error_code": "" if self.status == "success" else self.error_code,
+            "result": {"success": self.status == "success"},
+        }
+        self.session.put(self.result_topic, json.dumps(result).encode("utf-8"))
+
+    def close(self) -> None:
+        self.subscriber.undeclare()
+        self.session.close()
+
+
 class ActionBoundaryObserver:
     """Records ActionEvents at the real Zenoh boundary without simulating a robot."""
 
-    def __init__(self, action_topic: str = "robot/tunnel/action", port: int = 7447):
-        config = zenoh.Config.from_json5(
-            '{"mode":"peer","scouting":{"multicast":{"enabled":false}},'
-            f'"listen":{{"endpoints":["tcp/127.0.0.1:{port}"]}}}}'
-        )
-        self.session = zenoh.open(config)
+    def __init__(self, action_topic: str = "robot/tunnel/action"):
+        # Default multicast scouting: discovers the Tunnel on the loopback net.
+        self.session = zenoh.open(zenoh.Config())
         self._lock = threading.Lock()
         self.actions: list[dict] = []
         self.executable_commands = 0
@@ -364,8 +476,6 @@ class ActionBoundaryObserver:
         event = json.loads(bytes(sample.payload.to_bytes()))
         with self._lock:
             self.actions.append(event)
-            # Any published ActionEvent is an executable command crossing the
-            # Tunnel-to-simulator boundary.
             self.executable_commands += 1
             self.action_received.set()
 
@@ -399,19 +509,6 @@ def http_get(url: str):
             return response.status, dict(response.headers), response.read()
     except urllib.error.HTTPError as error:
         return error.code, dict(error.headers), error.read()
-
-
-def poll_action_status(status_url: str, terminal_states: set[str], timeout: float = 90) -> dict:
-    deadline = time.monotonic() + timeout
-    last = None
-    while time.monotonic() < deadline:
-        status, _, body = http_get(status_url)
-        if status == 200:
-            last = json.loads(body)
-            if last.get("state") in terminal_states:
-                return last
-        time.sleep(0.5)
-    raise AssertionError(f"status endpoint never reached {terminal_states}; last observation: {last}")
 
 
 def payment_signature_from_402(headers: dict) -> str:
