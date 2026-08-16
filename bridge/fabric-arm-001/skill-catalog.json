@@ -1,0 +1,25 @@
+[
+  {
+    "skill_id": "pick_object",
+    "description": "Pick a target object in the MuJoCo simulated pick-and-place scene. Payment is gated by the RoboPay Tunnel; settlement only occurs after the simulation reports a successful pick.",
+    "params": {
+      "object": {
+        "type": "string",
+        "values": [
+          "cube",
+          "unreachable",
+          "collision",
+          "timeout",
+          "far_cube",
+          "blocked_cube",
+          "slow_cube"
+        ]
+      },
+      "maxSteps": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 2000
+      }
+    }
+  }
+]
