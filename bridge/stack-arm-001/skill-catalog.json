@@ -1,0 +1,19 @@
+{
+  "skill": "stack_box",
+  "description": "Pick the floor box and stack it onto the fixed platform top. Real MuJoCo physics; failure (unreachable/collision/timeout/misstack) never settles.",
+  "price": "$0.10",
+  "parameters": {
+    "object": {
+      "type": "string",
+      "enum": ["stackable", "unreachable", "collision", "timeout", "far_box", "blocked_box", "slow_box"],
+      "default": "stackable",
+      "description": "Physical scene. 'stackable' is the success path; the others are real failure modes."
+    },
+    "maxSteps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "description": "Hard step budget for the execution trajectory."
+    }
+  }
+}
