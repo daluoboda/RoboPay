@@ -13,7 +13,7 @@ claimBoundary:
 evidence:
   captured: True
   status: captured
-  commit_sha: 0000000000000000000000000000000000000000
+  commit_sha: dfe5abe73e78c82094c39bbb1186078fe2087f83
   action_id: pending-push
   tx_hash: "0xc9248109694c50d4a7037018ea64a224cb1a2e2e1dfdfbbb48a73bd03b08240b"
   tx_network: base-sepolia
