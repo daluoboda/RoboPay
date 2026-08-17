@@ -8,7 +8,7 @@
   "amount_usdc": 0.1,
   "explorer_base": "https://sepolia.basescan.org/tx/",
   "txs": [
-    "ffde90c96c207314fe06e3803200982d7f109154fc0fb2dff347f8ea6788c970"
+    "0xffde90c96c207314fe06e3803200982d7f109154fc0fb2dff347f8ea6788c970"
   ],
   "method": "direct ERC-20 transfer (facilitator bypass)",
   "updated_at": "2026-08-16T06:20:19Z",
