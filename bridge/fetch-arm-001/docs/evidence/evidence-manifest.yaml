@@ -1,56 +1,25 @@
-schemaVersion: robopay-evidence.v1
-profileId: laok.fetch-001.fetch-mobile-pick.v1
-
 claimBoundary:
-  live: Live x402 verify+settle on Base Sepolia (real on-chain USDC transfer) and
-    live MuJoCo physics execution, both performed for this submission.
-  notClaimed: A publication video of the simulator motion is not included; the
-    MuJoCo result metrics are the authoritative execution evidence.
+  scope: simulator-only Tier 1
+  claimed: >-
+    The shared Tunnel validates x402 evidence before publishing an ActionEvent;
+    the MuJoCo bridge executes the skill and returns a correlated terminal
+    result; settlement is deferred until that result is a matching success.
+  notClaimed: >-
+    This profile does not claim physical hardware execution. A visual
+    recording proves only the exact live run it identifies and does not
+    replace the required Tunnel, simulator, payment-gate, and Sim-to-Sim
+    test suites.
 
 evidence:
-  - evidenceId: E-MUJOCO-001
-    file: terminal/fetch-arm-mujoco.png
-    sha256: PLACEHOLDER
-    bytes: PLACEHOLDER
-    dimensionsPx: 980x439
-    format: png
-    captureDate: 2026-08-12
-    scope: live-mujoco-physics-execution
-    trace:
-      skillId: fetch_object
-      status: PASS
-    visibleEvidence:
-      - MuJoCo headless simulation executed
-      - Fetch task completed successfully
-    limitations:
-      - Simulator output; no physical hardware actuated.
-
-  - evidenceId: E-SIM2SIM-001
-    file: evidence/sim_to_sim_validation.json
-    sha256: PLACEHOLDER
-    bytes: PLACEHOLDER
-    format: json
-    captureDate: 2026-08-12
-    scope: mujo-co-pybullet-agreement
-    visibleEvidence:
-      - static_spec_consistency: PASS
-      - pybullet_backend_contract: PASS
-      - dynamic_engine_agreement: PASS
-    limitations:
-      - Dynamic layer CI_GATED on Windows (PyBullet wheel unavailable).
-
-  - evidenceId: E-METRICS-001
-    file: evidence/metrics.json
-    sha256: PLACEHOLDER
-    bytes: PLACEHOLDER
-    format: json
-    captureDate: 2026-08-12
-    scope: payment-gate-validation
-    visibleEvidence:
-      - unpaid_rejected: PASS
-      - invalid_rejected: PASS
-      - paid_success: PASS_ONCHAIN_ONLY
-    limitations:
-      - Real x402 settlement verified on Base Sepolia.
-
-note: Evidence generated from real test execution + real on-chain settlement.
+  captured: True
+  status: captured
+  commit_sha: 1bf0a47f023ac5c4364869cdb17a3a86e54bef1a
+  action_id: 3cbba38d-1ee9-49e5-9a48-5601e2c4fb3f
+  tx_hash: 0x4402238d8a11f8b72af742a00ea2a392451dd51e0c1b057573324c4c1b082f66
+  tx_network: base-sepolia
+  basescan: https://sepolia.basescan.org/tx/0x4402238d8a11f8b72af742a00ea2a392451dd51e0c1b057573324c4c1b082f66
+  recording: robopay_evidence.gif
+  recording_sha256: 7dc1a2c2f2428ec9de94ed2ea54a23306ef6bb6847b229b57fd637c5fb2c2a8d
+  recording_bytes: 556166
+  sequence: ["unpaid 402 -> no actuation (0 executions)", "paid 202 + action_id -> Tunnel-verified x402 payment", "real MuJoCo physics motion", "correlated terminal result (action_id matched)", "success-only settlement via Tunnel facilitator /settle", "matching BaseScan transaction linked"]
+  notes: "Continuous clip: terminal + MuJoCo viewer readable in same frame. Real x402 gate + real MuJoCo physics. Real USDC settlement through Go Tunnel facilitator proven by tests/test_bridge_executes.py in CI."
