@@ -1,19 +1,25 @@
-schema: robopay.evidence_manifest/v1
-skill: door
-robot_id: door-arm-001
-skill_id: open_door
-generated: '2026-08-11T23:30:00+08:00'
-host: 104.168.103.106 (1C1G VPS, Linux, real pybullet)
-artifacts:
-- path: docs/evidence/sim2sim_linux_vps.png
-  sha256: 715479dab0d2ead8a7e322b9ee1c4bdae88fe121ebb974acf6bbb8861202c735
-  kind: pytest_log_render
-- path: docs/evidence/dynamic_override.json
-  sha256: b1966bbd56adac538713fabb31e737a95691c0d147758c1cf4d2b17340777e9b
-  kind: dynamic_agreement_result
-summary:
-  pytest: 12 passed, 6 skipped
-  dynamic_agreement: PASS (all TestSimToSimAgreement tests pass with real PyBullet)
-  open_delta: 0.022 rad (mujoco 0.529 vs pybullet 0.551; tolerance 0.05)
-  stuck: both engines insufficient_open/incomplete
-  out_of_range: both engines configuration_error/ungripped
+claimBoundary:
+  scope: simulator-only Tier 1
+  claimed: >-
+    The shared Tunnel validates x402 evidence before publishing an ActionEvent;
+    the MuJoCo bridge executes the skill and returns a correlated terminal
+    result; settlement is deferred until that result is a matching success.
+  notClaimed: >-
+    This profile does not claim physical hardware execution. A visual
+    recording proves only the exact live run it identifies and does not
+    replace the required Tunnel, simulator, payment-gate, and Sim-to-Sim
+    test suites.
+
+evidence:
+  captured: True
+  status: captured
+  commit_sha: 3ffc037b7e5aa548091cc7247083ead9f6b29534
+  action_id: fad12bfe-0f24-4a98-bc1c-7d41365a83bf
+  tx_hash: 0x51b4c425d313b563082a9fe173199fe5dd026c1aa0851b743f521b7cf6bb8e62
+  tx_network: base-sepolia
+  basescan: https://sepolia.basescan.org/tx/0x51b4c425d313b563082a9fe173199fe5dd026c1aa0851b743f521b7cf6bb8e62
+  recording: robopay_evidence.gif
+  recording_sha256: 1448641ac684cea06ac14eaa4442af880a524d7f528de38cffcb942de270232d
+  recording_bytes: 81444
+  sequence: ["unpaid 402 -> no actuation (0 executions)", "paid 202 + action_id -> Tunnel-verified x402 payment", "real MuJoCo physics motion", "correlated terminal result (action_id matched)", "success-only settlement via Tunnel facilitator /settle", "matching BaseScan transaction linked"]
+  notes: "Continuous clip: terminal + MuJoCo viewer readable in same frame. Real x402 gate + real MuJoCo physics. Real USDC settlement through Go Tunnel facilitator proven by tests/test_bridge_executes.py in CI."
