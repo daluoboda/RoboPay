@@ -1,0 +1,13 @@
+evidence:
+  captured: True
+  status: captured
+  commit_sha: f1aed2fc4bddae5b14440e2bb2798554a171778c
+  action_id: 55e28ef4-f2be-43af-b94c-afdaa6d05928
+  tx_hash: 0x42e5c6bd0bab8653c0417d7a17ded1e020621f26bb031282024f1961aff4feb2
+  tx_network: base-sepolia
+  basescan: https://sepolia.basescan.org/tx/0x42e5c6bd0bab8653c0417d7a17ded1e020621f26bb031282024f1961aff4feb2
+  recording: robopay_evidence.gif
+  recording_sha256: ad746bf180ef199e84d7ef3f2bec21561cc4f36e4de4a02bf14521fb46688b66
+  recording_bytes: 559566
+  sequence: ["unpaid 402 -> no actuation (0 executions)", "paid 202 + action_id -> Tunnel-verified x402 payment", "real MuJoCo physics motion", "correlated terminal result (action_id matched)", "success-only settlement via Tunnel facilitator /settle", "matching BaseScan transaction linked"]
+  notes: Continuous clip: terminal + MuJoCo viewer readable in same frame. Real x402 gate + real MuJoCo physics. Real USDC settlement through Go Tunnel facilitator proven by tests/test_bridge_executes.py in CI.
