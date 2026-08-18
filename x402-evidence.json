@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-08-18T14:30:00Z",
+  "robotId": "k1-001",
+  "skillId": "active_inspection",
+  "profileId": "laok.k1-001.active-inspection.v1",
+  "chain": {
+    "network": "base-sepolia",
+    "chainId": 84532
+  },
+  "payer": {
+    "address": "0xF2749b5fAdA8a83d3DE1a2621B1D212e73907D4a"
+  },
+  "payee": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+  },
+  "usdc": {
+    "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "decimals": 6
+  },
+  "payment": {
+    "amount": "100000",
+    "amountHuman": "0.10",
+    "currency": "USDC",
+    "txHash": "PENDING",
+    "txUrl": "https://sepolia.basescan.org/tx/PENDING"
+  },
+  "scenarios": [
+    {
+      "name": "inspection",
+      "result": "pending",
+      "note": "Real tx pending mint"
+    }
+  ],
+  "evidence": {
+    "type": "simulator",
+    "engine": "mujoco",
+    "status": "pending"
+  }
+}
