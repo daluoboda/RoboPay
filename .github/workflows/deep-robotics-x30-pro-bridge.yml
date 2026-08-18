@@ -1,11 +1,16 @@
 name: deep-robotics-x30-pro Tier 1 bridge
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [deep-robotics-x30-pro-tier-1]
+    paths:
+      - "bridge/deep-robotics/x30-pro/**"
+      - ".github/workflows/deep-robotics-x30-pro-bridge.yml"
   pull_request:
-    branches: [main, master]
-
+    paths:
+      - "bridge/deep-robotics/x30-pro/**"
+      - ".github/workflows/deep-robotics-x30-pro-bridge.yml"
 jobs:
   syntax:
     runs-on: ubuntu-22.04
