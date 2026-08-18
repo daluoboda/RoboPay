@@ -1,11 +1,16 @@
 name: limx-tron2 Tier 1 bridge
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [limx-tron2-tier-1]
+    paths:
+      - "bridge/limx/tron2/**"
+      - ".github/workflows/limx-tron2-bridge.yml"
   pull_request:
-    branches: [main, master]
-
+    paths:
+      - "bridge/limx/tron2/**"
+      - ".github/workflows/limx-tron2-bridge.yml"
 jobs:
   syntax:
     runs-on: ubuntu-22.04
