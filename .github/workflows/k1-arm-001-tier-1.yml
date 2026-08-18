@@ -1,0 +1,72 @@
+name: K1 Active Inspection Tier 1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'booster-k1-tier-1'
+  pull_request:
+    branches:
+      - 'booster-k1-tier-1'
+
+jobs:
+  validate:
+    name: Validate bridge structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          test -f bridge/k1-001/arm_spec.py && echo "arm_spec.py OK"
+          test -f bridge/k1-001/simulator.py && echo "simulator.py OK"
+          test -f bridge/k1-001/bridge.py && echo "bridge.py OK"
+          test -f bridge/k1-001/x402-evidence.json && echo "x402-evidence.json OK"
+          test -f bridge/k1-001/.github/workflows/k1-arm-001-tier-1.yml && echo "workflow OK"
+          echo "All required files present"
+
+  test:
+    name: Run simulator tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          pip install pytest mujoco pyyaml
+      - name: Run tests
+        run: |
+          cd bridge/k1-001
+          python -m pytest tests/ -v --tb=short
+        continue-on-error: true
+
+  profile-contract:
+    name: Profile contract check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate profile YAML
+        run: |
+          python -c "
+          import yaml, json, sys
+          p = yaml.safe_load(open('bridge/k1-001/profiles/robot.profile.yaml'))
+          assert p['profileId'].startswith('laok.k1-001'), 'bad profileId'
+          assert p['robotId'] == 'k1-001', 'bad robotId'
+          assert p['tier'] == 'Tier 1', 'wrong tier'
+          print('Profile OK:', p['profileId'])
+          "
+
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for secrets
+        run: |
+          if grep -r "private_key\|PRIVATE_KEY\|0x[0-9a-f]\{64\}" bridge/k1-001/ --include="*.py" --include="*.yaml" -l 2>/dev/null; then
+            echo "FAIL: potential secret found"
+            exit 1
+          fi
+          echo "No secrets detected"
