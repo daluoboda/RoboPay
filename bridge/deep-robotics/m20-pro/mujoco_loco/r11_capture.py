@@ -21,6 +21,9 @@ ROBOT_ID = "deep-robotics-m20-pro"
 LEGS = ['lf', 'rf', 'lh', 'rh']
 
 def _commit():
+    ov = os.environ.get("R11_COMMIT", "").strip()
+    if ov:
+        return ov
     try:
         return subprocess.check_output(["git", "-C", os.path.dirname(HERE),
             "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
