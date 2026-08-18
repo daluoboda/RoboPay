@@ -1,11 +1,16 @@
 name: boston-dynamics-atlas Tier 1 bridge
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [boston-dynamics-atlas-tier-1]
+    paths:
+      - "bridge/boston-dynamics/atlas/**"
+      - ".github/workflows/boston-dynamics-atlas-bridge.yml"
   pull_request:
-    branches: [main, master]
-
+    paths:
+      - "bridge/boston-dynamics/atlas/**"
+      - ".github/workflows/boston-dynamics-atlas-bridge.yml"
 jobs:
   syntax:
     runs-on: ubuntu-22.04
