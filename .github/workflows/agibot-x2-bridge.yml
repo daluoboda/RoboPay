@@ -1,11 +1,16 @@
 name: agibot-x2 Tier 1 bridge
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [agibot-x2-tier-1]
+    paths:
+      - "bridge/agibot/x2/**"
+      - ".github/workflows/agibot-x2-bridge.yml"
   pull_request:
-    branches: [main, master]
-
+    paths:
+      - "bridge/agibot/x2/**"
+      - ".github/workflows/agibot-x2-bridge.yml"
 jobs:
   syntax:
     runs-on: ubuntu-22.04
