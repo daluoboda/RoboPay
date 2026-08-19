@@ -1,8 +1,0 @@
-{
-  "tests/test_x402.py::TestRealMuJoCoCorrelated::test_real_mujoco_pick_succeeds": true,
-  "tests/test_sim2sim.py::TestSpecIsSingleSource::test_gripper_axes_are_opposed": true,
-  "tests/test_sim2sim.py::TestSpecIsSingleSource::test_keyframes_are_solved_not_guessed": true,
-  "tests/test_sim2sim.py::TestPyBulletBackendContract::test_collision_path_completes": true,
-  "tests/test_sim2sim.py::TestPyBulletBackendContract::test_constraint_and_urdf_calls_were_made": true,
-  "tests/test_sim2sim.py::TestPyBulletBackendContract::test_unreachable_path_completes": true
-}
